@@ -1,0 +1,732 @@
+# System Architecture - HealthMais Dashboard
+
+## 🏗️ Arquitetura em Camadas
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                     PRESENTATION LAYER                       │
+│  ┌─────────────┬─────────────┬─────────────┬──────────────┐ │
+│  │   Desktop   │   Tablet    │   Mobile    │   Analytics  │ │
+│  │   React     │   React     │   React     │   Dashboard  │ │
+│  └──────┬──────┴──────┬──────┴──────┬──────┴────────┬─────┘ │
+└─────────┼─────────────┼─────────────┼───────────────┼────────┘
+          │             │             │               │
+          └─────────────┴─────────────┴───────────────┘
+                        ↓
+┌──────────────────────────────────────────────────────────────┐
+│                    BUSINESS LOGIC LAYER                      │
+│  ┌──────────┬──────────┬──────────┬──────────┬────────────┐ │
+│  │  Auth    │  PBAC    │  Profile │ Dashboard│ Notifications
+│  │ Service  │ Service  │ Service  │ Service  │ Service    │ │
+│  └──────┬───┴────┬─────┴───┬──────┴─────┬────┴──────┬─────┘ │
+└─────────┼────────┼─────────┼────────────┼───────────┼────────┘
+          │        │         │            │           │
+          └────────┴─────────┴────────────┴───────────┘
+                        ↓
+┌──────────────────────────────────────────────────────────────┐
+│                      DATA ACCESS LAYER                       │
+│  ┌──────────┬──────────┬──────────┬────────────────────────┐ │
+│  │  Users   │  Roles   │ Policies │      Dashboards        │ │
+│  │  Repo    │  Repo    │  Repo    │ & Profile Repository   │ │
+│  │          │          │          │                        │ │
+│  └────┬─────┴────┬─────┴───┬──────┴────────────┬───────────┘ │
+└───────┼──────────┼─────────┼────────────────────┼─────────────┘
+        │          │         │                    │
+        └──────────┴─────────┴────────────────────┘
+                        ↓
+┌──────────────────────────────────────────────────────────────┐
+│                    PERSISTENCE LAYER                         │
+│  ┌──────────────────┬──────────────────┬──────────────────┐ │
+│  │   PostgreSQL     │      Redis       │  File Storage    │ │
+│  │  (Primary DB)    │   (Cache/Queue)  │  (Exports/Logs)  │ │
+│  └──────────────────┴──────────────────┴──────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🔌 Arquitetura de Componentes Frontend
+
+```
+HEALTHMAIS DASHBOARD
+│
+├── 📦 pages/
+│   ├── Login.jsx
+│   ├── Dashboard.jsx
+│   ├── ProfileManager.jsx
+│   ├── AdminPanel.jsx
+│   └── NotFound.jsx
+│
+├── 🧩 components/
+│   ├── Layout/
+│   │   ├── Header.jsx          (Logo, User menu, Logout)
+│   │   ├── Sidebar.jsx         (Navigation, Profiles)
+│   │   └── Footer.jsx
+│   │
+│   ├── Auth/
+│   │   ├── LoginForm.jsx
+│   │   ├── ForgotPassword.jsx
+│   │   ├── ResetPassword.jsx
+│   │   └── ProtectedRoute.jsx
+│   │
+│   ├── Dashboard/
+│   │   ├── DashboardGrid.jsx   (Layout responsivo)
+│   │   ├── WidgetContainer.jsx
+│   │   └── FilterBar.jsx       (Data range selector)
+│   │
+│   ├── Charts/
+│   │   ├── OccupancyGauge.jsx    (KPI 1)
+│   │   ├── RevenueLineChart.jsx  (KPI 2)
+│   │   ├── DepartmentBarChart.jsx (KPI 3)
+│   │   ├── TypesPieChart.jsx      (KPI 4)
+│   │   └── MetricsCard.jsx        (KPI 5)
+│   │
+│   ├── Profiles/
+│   │   ├── ProfileList.jsx
+│   │   ├── ProfileEditor.jsx
+│   │   └── ProfileSelector.jsx
+│   │
+│   ├── Admin/
+│   │   ├── RoleManager.jsx
+│   │   ├── PolicyBuilder.jsx
+│   │   ├── UserManagement.jsx
+│   │   └── AuditLog.jsx
+│   │
+│   └── Common/
+│       ├── Loading.jsx
+│       ├── ErrorBoundary.jsx
+│       ├── Modal.jsx
+│       └── Toast.jsx
+│
+├── 🪝 hooks/
+│   ├── useAuth.js            (Auth context)
+│   ├── usePBAC.js            (Access control)
+│   ├── useDashboard.js       (Dashboard data)
+│   ├── useWebSocket.js       (Real-time updates)
+│   ├── useLocalStorage.js
+│   └── useTheme.js
+│
+├── 🔄 services/
+│   ├── authService.js        (Login, logout, token)
+│   ├── pbacService.js        (Roles, policies)
+│   ├── dashboardService.js   (Fetch chart data)
+│   ├── profileService.js     (CRUD profiles)
+│   ├── apiClient.js          (Axios instance)
+│   └── websocketService.js   (Socket.io client)
+│
+├── 🎨 styles/
+│   ├── globals.css
+│   ├── variables.css        (Design tokens)
+│   ├── themes/
+│   │   ├── light.css
+│   │   └── dark.css
+│   └── components/
+│       ├── dashboard.css
+│       ├── charts.css
+│       └── forms.css
+│
+├── 🏪 store/
+│   ├── authStore.js         (Zustand/Redux)
+│   ├── dashboardStore.js
+│   ├── profileStore.js
+│   └── uiStore.js
+│
+├── 🛡️ utils/
+│   ├── validators.js
+│   ├── formatters.js
+│   ├── constants.js
+│   └── helpers.js
+│
+└── 📄 App.jsx
+    └── index.js
+```
+
+---
+
+## 🖥️ Arquitetura de Componentes Backend
+
+```
+HEALTHMAIS API
+│
+├── 🚀 app.js                 (Express entry point)
+│
+├── ⚙️ config/
+│   ├── database.js
+│   ├── redis.js
+│   ├── jwt.js
+│   ├── cors.js
+│   └── env.js
+│
+├── 🔐 middleware/
+│   ├── authMiddleware.js     (Verifica JWT)
+│   ├── pbacMiddleware.js     (Aplica políticas)
+│   ├── errorHandler.js
+│   ├── requestLogger.js
+│   └── rateLimiter.js
+│
+├── 🛣️ routes/
+│   ├── auth.routes.js
+│   │   ├── POST /auth/login
+│   │   ├── POST /auth/logout
+│   │   ├── POST /auth/refresh
+│   │   └── POST /auth/forgot-password
+│   │
+│   ├── users.routes.js
+│   │   ├── GET /users/me
+│   │   ├── PUT /users/me
+│   │   └── POST /users/:id/disable
+│   │
+│   ├── roles.routes.js
+│   │   ├── GET /admin/roles
+│   │   ├── POST /admin/roles
+│   │   ├── PUT /admin/roles/:id
+│   │   └── DELETE /admin/roles/:id
+│   │
+│   ├── policies.routes.js
+│   │   ├── GET /admin/policies
+│   │   ├── POST /admin/policies
+│   │   ├── PUT /admin/policies/:id
+│   │   └── POST /admin/policies/test
+│   │
+│   ├── dashboard.routes.js
+│   │   ├── GET /dashboard/metrics
+│   │   ├── GET /dashboard/charts/:id
+│   │   └── GET /dashboard/export
+│   │
+│   └── profiles.routes.js
+│       ├── GET /profiles
+│       ├── POST /profiles
+│       ├── PUT /profiles/:id
+│       └── DELETE /profiles/:id
+│
+├── 🎮 controllers/
+│   ├── authController.js
+│   ├── userController.js
+│   ├── roleController.js
+│   ├── policyController.js
+│   ├── dashboardController.js
+│   └── profileController.js
+│
+├── 💼 services/
+│   ├── authService.js
+│   │   ├── login()
+│   │   ├── validateToken()
+│   │   ├── generateJWT()
+│   │   └── hashPassword()
+│   │
+│   ├── pbacService.js
+│   │   ├── hasPermission()
+│   │   ├── buildQuery()
+│   │   ├── evaluatePolicy()
+│   │   └── getCachedPolicies()
+│   │
+│   ├── dashboardService.js
+│   │   ├── getOccupancyData()
+│   │   ├── getRevenueData()
+│   │   ├── getDepartmentData()
+│   │   ├── applyPBACFilter()
+│   │   └── cacheResults()
+│   │
+│   ├── profileService.js
+│   │   ├── createProfile()
+│   │   ├── getUserProfiles()
+│   │   └── shareProfile()
+│   │
+│   ├── auditService.js
+│   │   ├── logAccess()
+│   │   ├── logFailedAttempt()
+│   │   └── getAuditLog()
+│   │
+│   └── notificationService.js
+│       ├── sendEmail()
+│       ├── sendSMS()
+│       └── broadcastToWebSocket()
+│
+├── 🗄️ models/
+│   ├── User.js
+│   │   ├── id
+│   │   ├── email
+│   │   ├── password_hash
+│   │   ├── roles: Role[]
+│   │   ├── attributes: Object
+│   │   ├── active: Boolean
+│   │   └── createdAt
+│   │
+│   ├── Role.js
+│   │   ├── id
+│   │   ├── name
+│   │   ├── description
+│   │   ├── permissions: Permission[]
+│   │   └── users: User[]
+│   │
+│   ├── Policy.js
+│   │   ├── id
+│   │   ├── name
+│   │   ├── rules: Rule[]
+│   │   ├── version
+│   │   └── isActive: Boolean
+│   │
+│   ├── Dashboard.js
+│   │   ├── id
+│   │   ├── userId
+│   │   ├── name
+│   │   ├── widgets: Widget[]
+│   │   └── isDefault: Boolean
+│   │
+│   └── AuditLog.js
+│       ├── id
+│       ├── userId
+│       ├── action
+│       ├── resource
+│       ├── status
+│       └── timestamp
+│
+└── 🎯 websocket/
+    ├── socketManager.js
+    ├── events/
+    │   ├── dashboard.events.js
+    │   ├── notification.events.js
+    │   └── system.events.js
+    └── emitters/
+        ├── metricsEmitter.js
+        └── alertEmitter.js
+```
+
+---
+
+## 🔄 Fluxo de Dados - Autenticação
+
+```
+┌────────────┐
+│   Login    │
+│ UI Form    │
+└─────┬──────┘
+      │
+      │ POST /auth/login {email, password}
+      ↓
+┌──────────────────┐
+│ Auth Middleware  │
+│ Validate input   │
+└────────┬─────────┘
+         │
+         ↓
+┌────────────────────────┐
+│ authController.login() │
+└────────┬───────────────┘
+         │
+         ↓
+┌────────────────────────┐
+│ authService.login()    │
+│ 1. Find user by email  │
+│ 2. Verify password     │
+│ 3. Generate JWT        │
+│ 4. Store refresh token │
+└────────┬───────────────┘
+         │
+         ↓
+┌────────────────────┐
+│ PostgreSQL         │
+│ users table        │
+└────────┬───────────┘
+         │
+         ↓
+┌──────────────────────────┐
+│ Response 200             │
+│ {                        │
+│   "token": "jwt...",     │
+│   "user": {...}          │
+│ }                        │
+└────────┬─────────────────┘
+         │
+         ↓
+┌─────────────────────────┐
+│ Client Storage          │
+│ localStorage.token      │
+│ axios default header    │
+└────────┬────────────────┘
+         │
+         ↓
+┌──────────────────────────┐
+│ Redirect to Dashboard    │
+│ All requests now include │
+│ Authorization: Bearer ...|
+└──────────────────────────┘
+```
+
+---
+
+## 🔄 Fluxo de Dados - PBAC
+
+```
+┌─────────────────────┐
+│ GET /dashboard/     │
+│ metrics             │
+└──────────┬──────────┘
+           │
+           │ JWT Token
+           ↓
+┌─────────────────────────┐
+│ Auth Middleware         │
+│ Verify JWT token        │
+│ Extract user_id         │
+└──────────┬──────────────┘
+           │
+           ↓
+┌──────────────────────────┐
+│ PBAC Middleware          │
+│ Get user roles + attrs   │
+└──────────┬───────────────┘
+           │
+           ↓
+┌─────────────────────────┐
+│ pbacService.            │
+│ evaluatePolicy()        │
+│ Check: department,      │
+│ hospital_id, role       │
+└──────────┬──────────────┘
+           │
+           ↓ Rules matched?
+    ┌──────┴────────┐
+    │ YES    │ NO   │
+    ↓        ↓
+  Continue Deny
+    │        │
+    │    ┌───┴────────────┐
+    │    │ auditService.  │
+    │    │ logFailedAttempt
+    │    └────────────────┘
+    │
+    ↓
+┌────────────────────────────┐
+│ dashboardController.       │
+│ getMetrics(filters)        │
+└──────────┬─────────────────┘
+           │
+           ↓
+┌────────────────────────────┐
+│ pbacService.buildQuery()   │
+│ Add WHERE clauses from     │
+│ PBAC rules to SQL          │
+│ {                          │
+│   WHERE department='Card'  │
+│   AND hospital_id IN [1,2] │
+│ }                          │
+└──────────┬─────────────────┘
+           │
+           ↓
+┌────────────────────────────┐
+│ Dashboard Service          │
+│ Execute query + cache      │
+└──────────┬─────────────────┘
+           │
+           ↓
+┌────────────────────────────┐
+│ PostgreSQL                 │
+│ Returns filtered results   │
+└──────────┬─────────────────┘
+           │
+           ↓
+┌────────────────────────────┐
+│ Redis Cache                │
+│ Store with TTL             │
+└──────────┬─────────────────┘
+           │
+           ↓
+┌────────────────────────────┐
+│ Response 200               │
+│ {                          │
+│   occupancy: 78,           │
+│   patients: 523,           │
+│   ...                      │
+│ }                          │
+└────────┬───────────────────┘
+         │
+         ↓
+┌───────────────────────────┐
+│ Browser                   │
+│ Render charts com dados   │
+│ PBAC-filtered             │
+└───────────────────────────┘
+```
+
+---
+
+## 🌐 Real-time Architecture - WebSocket
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                    WEBSOCKET SERVER                       │
+│  (Socket.io na porta 3001)                              │
+└───────────────────┬────────────────────────────────────┘
+                    │
+        ┌───────────┼───────────┐
+        ↓           ↓           ↓
+    ┌──────────┐ ┌──────────┐ ┌──────────┐
+    │ Browser 1│ │ Browser 2│ │ Browser N│
+    │ User: 1  │ │ User: 2  │ │ User: 3  │
+    └──────────┘ └──────────┘ └──────────┘
+
+
+FLOW:
+1. Client conecta: io.connect('ws://localhost:3001')
+   └─ Autenticação via token JWT
+
+2. Server monitora mudanças no banco (triggers)
+   └─ New patient checked-in
+   └─ Revenue updated
+   └─ Bed status changed
+
+3. Server emite evento (em broadcast):
+   io.emit('metrics:updated', {
+     occupancy: 78,
+     patients: 523,
+     timestamp: '2026-02-27T14:25:00Z'
+   })
+
+4. Todos os clientes recebem:
+   socket.on('metrics:updated', (data) => {
+     updateChart(data)  // Atualiza gráfico
+   })
+
+5. Animação suave (CSS transition: 1s)
+   └─ Usuário não nota "jump", vê transição suave
+
+6. Fallback: Se WebSocket cai
+   └─ App continua funcionando
+   └─ Usa polling a cada 30s
+   └─ Mostra offline badge
+```
+
+---
+
+## 🗄️ Database Schema Overview
+
+```
+┌─────────────────────────┐
+│     USERS               │
+├─────────────────────────┤
+│ id (PK)                 │
+│ email (UNIQUE)          │
+│ password_hash           │
+│ active (BOOLEAN)        │
+│ created_at              │
+│ updated_at              │
+└────────────┬────────────┘
+             │
+    ┌────────┴────────┐
+    │                 │
+    ↓                 ↓
+┌──────────────┐   ┌──────────────────┐
+│ USER_ROLES   │   │ USER_ATTRIBUTES  │
+├──────────────┤   ├──────────────────┤
+│ user_id (FK) │   │ user_id (FK)     │
+│ role_id (FK) │   │ key              │
+└──────────────┘   │ value            │
+    │              │ (JSON or native) │
+    ↓              └──────────────────┘
+┌──────────────┐
+│    ROLES     │
+├──────────────┤
+│ id (PK)      │
+│ name         │
+│ description  │
+└──────┬───────┘
+       │
+       ↓
+┌──────────────────┐
+│ ROLE_PERMISSIONS │
+├──────────────────┤
+│ role_id (FK)     │
+│ permission_id(FK)│
+└──────────────────┘
+       │
+       ↓
+┌──────────────┐
+│ PERMISSIONS  │
+├──────────────┤
+│ id (PK)      │
+│ code         │
+│ description  │
+└──────────────┘
+
+
+┌─────────────────┐
+│     POLICIES    │
+├─────────────────┤
+│ id (PK)         │
+│ name            │
+│ version         │
+│ rules (JSON)    │
+│ is_active       │
+│ created_at      │
+└────────┬────────┘
+         │
+         ↓
+┌──────────────────┐
+│ POLICY_VERSIONS  │
+├──────────────────┤
+│ id (PK)          │
+│ policy_id (FK)   │
+│ version_num      │
+│ rules (JSON)     │
+│ created_at       │
+└──────────────────┘
+
+
+┌─────────────────┐
+│   DASHBOARDS    │
+├─────────────────┤
+│ id (PK)         │
+│ user_id (FK)    │
+│ name            │
+│ widgets (JSON)  │
+│ is_default      │
+│ created_at      │
+└─────────────────┘
+
+
+┌──────────────────┐
+│   AUDIT_LOGS     │
+├──────────────────┤
+│ id (PK)          │
+│ user_id (FK)     │
+│ action           │
+│ resource         │
+│ status (OK/FAIL) │
+│ details (JSON)   │
+│ timestamp        │
+└──────────────────┘
+```
+
+---
+
+## 📊 Deployment Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│              LOAD BALANCER (Nginx)                  │
+│              :80, :443 (SSL)                        │
+└────────┬──────────────────┬──────────────────┬──────┘
+         │                  │                  │
+    ┌────▼────┐        ┌────▼────┐       ┌────▼────┐
+    │Instance 1│       │Instance 2│       │Instance N│
+    │ Backend  │       │ Backend  │       │ Backend  │
+    │ Node.js  │       │ Node.js  │       │ Node.js  │
+    └────┬─────┘       └────┬─────┘       └────┬─────┘
+         │                  │                  │
+         └──────────────────┼──────────────────┘
+                            │
+        ┌───────────────────┼───────────────────┐
+        │                   │                   │
+        ↓                   ↓                   ↓
+    ┌─────────────┐   ┌──────────┐      ┌────────────┐
+    │ PostgreSQL  │   │  Redis   │      │ File Store │
+    │ Cluster     │   │ Cluster  │      │ (S3/GCS)   │
+    │ Primary +   │   │ Cache +  │      │ (Exports)  │
+    │ Replicas    │   │ Sessions │      │ (Logs)     │
+    └─────────────┘   └──────────┘      └────────────┘
+
+
+┌─────────────────────────────────────┐
+│   FRONTEND (Static)                 │
+├─────────────────────────────────────┤
+│ React + Next.js                     │
+│ Build: npm run build                │
+│ Output: /out (static)               │
+│ Deploy: CDN (CloudFront/Cloudflare) │
+│ Cache: Aggressive (JS, CSS files)   │
+│ TTL: 1 year (versioning)            │
+└─────────────────────────────────────┘
+
+
+┌──────────────────────────────────────┐
+│   MONITORING & ALERTING              │
+├──────────────────────────────────────┤
+│ Prometheus (metrics)                 │
+│ Grafana (dashboards)                 │
+│ Alert Manager (notifications)        │
+│ ELK Stack (logs: Elasticsearch)      │
+│ Sentry (error tracking)              │
+└──────────────────────────────────────┘
+```
+
+---
+
+## 🔐 Security Architecture
+
+```
+┌──────────────────────────────────────────┐
+│    SECURITY LAYERS                       │
+└──────────────────────────────────────────┘
+
+LAYER 1: NETWORK
+├─ HTTPS only (TLS 1.3+)
+├─ HSTS (Strict-Transport-Security)
+├─ WAF (Web Application Firewall)
+├─ DDoS Protection
+└─ Rate Limiting (100 req/min per IP)
+
+LAYER 2: APPLICATION
+├─ JWT with RS256 (asymmetric)
+├─ Token expiry: 15 min (access) + 7d (refresh)
+├─ PBAC enforcement on every request
+├─ Input validation + sanitization
+├─ CORS restricted to known domains
+└─ CSRF tokens on state-changing ops
+
+LAYER 3: DATA
+├─ Password hashing (bcrypt: 10 rounds)
+├─ Sensitive fields encrypted at rest
+├─ SQL Injection prevention (parameterized)
+├─ Row-level security (PostgreSQL RLS)
+└─ Audit trail for all access
+
+LAYER 4: INFRASTRUCTURE
+├─ Secrets management (HashiCorp Vault)
+├─ Network segmentation (VPC)
+├─ Database encryption (TDE)
+├─ Regular security audits
+└─ Penetration testing (quarterly)
+```
+
+---
+
+## 📈 Scalability Considerations
+
+| Component | Current | Horizontal | Vertical |
+|-----------|---------|-----------|----------|
+| Backend | 2-4 instances | ✅ Load balancer | ✅ CPU/RAM |
+| Database | 1 Primary + 1 Replica | ✅ Sharding | ✅ Bigger server |
+| Cache (Redis) | 1 instance | ✅ Redis Cluster | ✅ Memory |
+| Frontend | CDN | ✅ Unlimited | N/A |
+| WebSocket | 1 server | ✅ Socket.io adapter | ✅ CPU |
+
+**Target:** 10K concurrent users, 100K daily active users
+
+---
+
+## 🚀 Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 18+, TypeScript, Tailwind CSS, Recharts |
+| **Backend** | Node.js/Express, TypeScript |
+| **Database** | PostgreSQL 14+ |
+| **Cache/Queue** | Redis 6+ |
+| **Auth** | JWT (RS256) + OAuth2 (future) |
+| **Real-time** | Socket.io |
+| **Testing** | Jest, React Testing Library, Supertest |
+| **CI/CD** | GitHub Actions |
+| **Monitoring** | Prometheus, Grafana, Sentry |
+| **Containerization** | Docker |
+| **Orchestration** | Kubernetes (future) |
+
+---
+
+## 📋 Next Steps
+
+1. Validar arquitetura com time
+2. Criar diagrama detalhado de APIs
+3. Preparar ambiente de desenvolvimento
+4. Setup CI/CD pipeline
+5. Iniciar Sprint 0 (Setup)
