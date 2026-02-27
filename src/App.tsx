@@ -394,6 +394,113 @@ function ProcedimentoTable() {
   )
 }
 
+function AtendimentoHorasChart() {
+  // Aggregate attendance hours from all patients with ID accommodation
+  const patientsComHoras = pacientes.filter(p => (p as any).horasAtendimento)
+
+  const horasData = {
+    "3h": 0,
+    "6h": 0,
+    "12h": 0,
+    "24h": 0,
+  }
+
+  patientsComHoras.forEach(p => {
+    const horas = (p as any).horasAtendimento || {}
+    Object.entries(horas).forEach(([hora, valor]) => {
+      horasData[hora as keyof typeof horasData] += valor as number
+    })
+  })
+
+  const chartData = Object.entries(horasData).map(([hora, valor]) => ({
+    horas: hora,
+    valor,
+  }))
+
+  const total = Object.values(horasData).reduce((a, b) => a + b, 0)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Atendimento por Horas - Análise Geral</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Gráfico de Barras */}
+        <div>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="horas" />
+              <YAxis />
+              <Tooltip content={<CustomTooltipCurrency />} />
+              <Bar dataKey="valor" fill="#2563eb" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Cards com Resumo */}
+        <div className="grid gap-4 md:grid-cols-4">
+          {chartData.map((item) => {
+            const pct = ((item.valor / total) * 100).toFixed(1)
+            return (
+              <div key={item.horas} className="p-4 rounded-lg border bg-muted/50">
+                <p className="text-sm font-medium text-muted-foreground mb-2">{item.horas}</p>
+                <p className="text-xl font-bold">{formatCompact(item.valor)}</p>
+                <p className="text-xs text-muted-foreground mt-1">{pct}% do total</p>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Tabela com Detalhes por Paciente */}
+        <div className="pt-6 border-t">
+          <h3 className="text-sm font-medium mb-4">Detalhamento por Paciente</h3>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Paciente</TableHead>
+                <TableHead>Municipio</TableHead>
+                <TableHead>Operadora</TableHead>
+                <TableHead className="text-right">3h</TableHead>
+                <TableHead className="text-right">6h</TableHead>
+                <TableHead className="text-right">12h</TableHead>
+                <TableHead className="text-right">24h</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {patientsComHoras.map(p => {
+                const horas = (p as any).horasAtendimento || {}
+                const subtotal = Object.values(horas).reduce((a: number, b) => a + (b as number), 0)
+                return (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-medium">{p.nome}</TableCell>
+                    <TableCell className="text-sm">{p.municipio}</TableCell>
+                    <TableCell className="text-sm truncate max-w-[150px]">{p.operadora}</TableCell>
+                    <TableCell className="text-right text-sm">{formatCurrency(horas["3h"] as number || 0)}</TableCell>
+                    <TableCell className="text-right text-sm">{formatCurrency(horas["6h"] as number || 0)}</TableCell>
+                    <TableCell className="text-right text-sm">{formatCurrency(horas["12h"] as number || 0)}</TableCell>
+                    <TableCell className="text-right text-sm">{formatCurrency(horas["24h"] as number || 0)}</TableCell>
+                    <TableCell className="text-right font-medium">{formatCurrency(subtotal)}</TableCell>
+                  </TableRow>
+                )
+              })}
+              <TableRow className="font-bold bg-muted/50">
+                <TableCell colSpan={3}>Total</TableCell>
+                <TableCell className="text-right">{formatCurrency(horasData["3h"])}</TableCell>
+                <TableCell className="text-right">{formatCurrency(horasData["6h"])}</TableCell>
+                <TableCell className="text-right">{formatCurrency(horasData["12h"])}</TableCell>
+                <TableCell className="text-right">{formatCurrency(horasData["24h"])}</TableCell>
+                <TableCell className="text-right">{formatCurrency(total)}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function AnaliticoPacientes() {
   const [municipioFilter, setMunicipioFilter] = React.useState<string>("todos")
   const [statusFilter, setStatusFilter] = React.useState<string>("todos")
@@ -647,6 +754,7 @@ function App() {
             <TabsTrigger value="procedimentos">Procedimentos</TabsTrigger>
             <TabsTrigger value="geografico">Geográfico</TabsTrigger>
             <TabsTrigger value="operadoras">Operadoras</TabsTrigger>
+            <TabsTrigger value="horas">Atendimento Horas</TabsTrigger>
             <TabsTrigger value="analitico">Analítico</TabsTrigger>
           </TabsList>
 
@@ -747,6 +855,11 @@ function App() {
                 </Table>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Atendimento por Horas */}
+          <TabsContent value="horas" className="space-y-6">
+            <AtendimentoHorasChart />
           </TabsContent>
 
           {/* Analítico */}
