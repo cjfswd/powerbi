@@ -570,8 +570,13 @@ function App() {
               <Building2 className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold leading-none">HealthMais</h1>
-              <p className="text-xs text-muted-foreground">Faturamento 2025 - Healthcare / Home Care</p>
+              <select name="" id="">
+                <option value="">Todas Operadoras</option>
+                <option value="">Unimed</option>
+                <option value="">Camperj</option>
+              </select>
+              <h1 className="text-lg font-bold leading-none"></h1>
+              <p className="text-xs text-muted-foreground">Faturamento 2025 - Atendimento Domiciliar</p>
             </div>
           </div>
         </div>
@@ -703,8 +708,8 @@ function App() {
       {/* Footer */}
       <footer className="border-t mt-8">
         <div className="max-w-[1400px] mx-auto px-6 py-4 flex items-center justify-between text-xs text-muted-foreground">
-          <span>HealthMais Dashboard - Faturamento 2025</span>
-          <span>Dados referentes ao exercicio 2025 - Home Care</span>
+          <span>Unimed Nova Iguaçu / Camperj Dashboard - Faturamento 2025</span>
+          <span>Dados referentes ao exercício 2025 - Atendimento Domiciliar</span>
         </div>
       </footer>
     </div>

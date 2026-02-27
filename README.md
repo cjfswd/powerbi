@@ -1,6 +1,6 @@
-# HealthMais Dashboard - Faturamento 2025
+# Unimed Nova Iguaçu / Camperj Dashboard - Faturamento 2025
 
-Dashboard de faturamento para Healthcare / HealthMais no modelo de atendimento domiciliar (Home Care).
+Dashboard de faturamento para Unimed Nova Iguaçu e Camperj no modelo de atendimento domiciliar.
 
 ## Stack
 

@@ -46,8 +46,8 @@ export const perfilSexo = [
 ]
 
 export const valorOperadora = [
-  { operadora: "Healthcare Gestão em Saúde Ltda", valor: 3108067.59 },
-  { operadora: "HealthMais Cuidados e Gestão Ltda", valor: 1543878.05 },
+  { operadora: "Unimed Nova Iguaçu", valor: 3108067.59 },
+  { operadora: "Camperj", valor: 1543878.05 },
 ]
 
 export const tipoAcomodacao = [
@@ -72,16 +72,16 @@ export const tipoDespesa = { tipo: "Atendimento Domiciliar", valor: 4651945.64 }
 
 // Dados de pacientes com status
 export const pacientes = [
-  { id: 1, nome: "João Silva", municipio: "Nova Iguaçu", status: "Internação", custo: 45230.50, operadora: "Healthcare Gestão em Saúde Ltda", acomodacao: "ID" },
-  { id: 2, nome: "Maria Santos", municipio: "Rio de Janeiro", status: "Alta", custo: 38500.00, operadora: "HealthMais Cuidados e Gestão Ltda", acomodacao: "AD" },
-  { id: 3, nome: "Carlos Oliveira", municipio: "Belford Roxo", status: "Óbito", custo: 52000.00, operadora: "Healthcare Gestão em Saúde Ltda", acomodacao: "ID" },
-  { id: 4, nome: "Ana Costa", municipio: "Nova Iguaçu", status: "Ouvidoria", custo: 41200.00, operadora: "HealthMais Cuidados e Gestão Ltda", acomodacao: "AD" },
-  { id: 5, nome: "Pedro Gomes", municipio: "S. J. de Meriti", status: "Internação", custo: 48900.00, operadora: "Healthcare Gestão em Saúde Ltda", acomodacao: "ID" },
-  { id: 6, nome: "Lucia Ferreira", municipio: "Nova Iguaçu", status: "Alta", custo: 39800.00, operadora: "HealthMais Cuidados e Gestão Ltda", acomodacao: "AD" },
-  { id: 7, nome: "Roberto Alves", municipio: "Queimados", status: "Internação", custo: 44500.00, operadora: "Healthcare Gestão em Saúde Ltda", acomodacao: "ID" },
-  { id: 8, nome: "Fernanda Lima", municipio: "Rio de Janeiro", status: "Óbito", custo: 50100.00, operadora: "HealthMais Cuidados e Gestão Ltda", acomodacao: "AD" },
-  { id: 9, nome: "Gustavo Martins", municipio: "Mesquita", status: "Alta", custo: 36200.00, operadora: "Healthcare Gestão em Saúde Ltda", acomodacao: "ID" },
-  { id: 10, nome: "Patricia Rocha", municipio: "Nova Iguaçu", status: "Ouvidoria", custo: 42800.00, operadora: "HealthMais Cuidados e Gestão Ltda", acomodacao: "AD" },
+  { id: 1, nome: "João Silva", municipio: "Nova Iguaçu", status: "Internação", custo: 45230.50, operadora: "Unimed Nova Iguaçu", acomodacao: "ID" },
+  { id: 2, nome: "Maria Santos", municipio: "Rio de Janeiro", status: "Alta", custo: 38500.00, operadora: "Camperj", acomodacao: "AD" },
+  { id: 3, nome: "Carlos Oliveira", municipio: "Belford Roxo", status: "Óbito", custo: 52000.00, operadora: "Unimed Nova Iguaçu", acomodacao: "ID" },
+  { id: 4, nome: "Ana Costa", municipio: "Nova Iguaçu", status: "Ouvidoria", custo: 41200.00, operadora: "Camperj", acomodacao: "AD" },
+  { id: 5, nome: "Pedro Gomes", municipio: "S. J. de Meriti", status: "Internação", custo: 48900.00, operadora: "Unimed Nova Iguaçu", acomodacao: "ID" },
+  { id: 6, nome: "Lucia Ferreira", municipio: "Nova Iguaçu", status: "Alta", custo: 39800.00, operadora: "Camperj", acomodacao: "AD" },
+  { id: 7, nome: "Roberto Alves", municipio: "Queimados", status: "Internação", custo: 44500.00, operadora: "Unimed Nova Iguaçu", acomodacao: "ID" },
+  { id: 8, nome: "Fernanda Lima", municipio: "Rio de Janeiro", status: "Óbito", custo: 50100.00, operadora: "Camperj", acomodacao: "AD" },
+  { id: 9, nome: "Gustavo Martins", municipio: "Mesquita", status: "Alta", custo: 36200.00, operadora: "Unimed Nova Iguaçu", acomodacao: "ID" },
+  { id: 10, nome: "Patricia Rocha", municipio: "Nova Iguaçu", status: "Ouvidoria", custo: 42800.00, operadora: "Camperj", acomodacao: "AD" },
 ]
 
 // Mapa de status com cores
