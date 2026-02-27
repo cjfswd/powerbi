@@ -5,8 +5,8 @@ export const kpis = {
   mediaMensalPaga: 775324.27,
   valorTotalGlosado: 0,
   mediaMensalGlosado: 0,
-  beneficiariosDistintos: 110,
-  custoMedioBeneficiario: 42290.41,
+  pacientesDistintos: 110,
+  custoMedioPaciente: 42290.41,
 }
 
 export const distribuicaoAssistencia = [
@@ -45,14 +45,14 @@ export const perfilSexo = [
   { sexo: "Feminino", percentual: 30.06, cor: "#db2777" },
 ]
 
-export const valorPrestador = [
-  { prestador: "Healthcare Gestão em Saúde Ltda", valor: 3108067.59 },
-  { prestador: "HealthMais Cuidados e Gestão Ltda", valor: 1543878.05 },
+export const valorOperadora = [
+  { operadora: "Healthcare Gestão em Saúde Ltda", valor: 3108067.59 },
+  { operadora: "HealthMais Cuidados e Gestão Ltda", valor: 1543878.05 },
 ]
 
 export const tipoAcomodacao = [
-  { tipo: "Enfermaria", valor: 3577064.84, cor: "#2563eb" },
-  { tipo: "Apartamento", valor: 1074880.80, cor: "#7c3aed" },
+  { tipo: "ID", label: "Internação Domiciliar", valor: 3577064.84, cor: "#2563eb" },
+  { tipo: "AD", label: "Atendimento Domiciliar", valor: 1074880.80, cor: "#7c3aed" },
 ]
 
 export const faturamentoMensal = [
@@ -69,3 +69,26 @@ export const tipoGuia = { tipo: "SP/SADT", valor: 4651945.64 }
 export const areaPrestador = { area: "Rio de Janeiro", valor: 4651945.64 }
 
 export const tipoDespesa = { tipo: "Atendimento Domiciliar", valor: 4651945.64 }
+
+// Dados de pacientes com status
+export const pacientes = [
+  { id: 1, nome: "João Silva", municipio: "Nova Iguaçu", status: "Internação", custo: 45230.50, operadora: "Healthcare Gestão em Saúde Ltda", acomodacao: "ID" },
+  { id: 2, nome: "Maria Santos", municipio: "Rio de Janeiro", status: "Alta", custo: 38500.00, operadora: "HealthMais Cuidados e Gestão Ltda", acomodacao: "AD" },
+  { id: 3, nome: "Carlos Oliveira", municipio: "Belford Roxo", status: "Óbito", custo: 52000.00, operadora: "Healthcare Gestão em Saúde Ltda", acomodacao: "ID" },
+  { id: 4, nome: "Ana Costa", municipio: "Nova Iguaçu", status: "Ouvidoria", custo: 41200.00, operadora: "HealthMais Cuidados e Gestão Ltda", acomodacao: "AD" },
+  { id: 5, nome: "Pedro Gomes", municipio: "S. J. de Meriti", status: "Internação", custo: 48900.00, operadora: "Healthcare Gestão em Saúde Ltda", acomodacao: "ID" },
+  { id: 6, nome: "Lucia Ferreira", municipio: "Nova Iguaçu", status: "Alta", custo: 39800.00, operadora: "HealthMais Cuidados e Gestão Ltda", acomodacao: "AD" },
+  { id: 7, nome: "Roberto Alves", municipio: "Queimados", status: "Internação", custo: 44500.00, operadora: "Healthcare Gestão em Saúde Ltda", acomodacao: "ID" },
+  { id: 8, nome: "Fernanda Lima", municipio: "Rio de Janeiro", status: "Óbito", custo: 50100.00, operadora: "HealthMais Cuidados e Gestão Ltda", acomodacao: "AD" },
+  { id: 9, nome: "Gustavo Martins", municipio: "Mesquita", status: "Alta", custo: 36200.00, operadora: "Healthcare Gestão em Saúde Ltda", acomodacao: "ID" },
+  { id: 10, nome: "Patricia Rocha", municipio: "Nova Iguaçu", status: "Ouvidoria", custo: 42800.00, operadora: "HealthMais Cuidados e Gestão Ltda", acomodacao: "AD" },
+]
+
+// Mapa de status com cores
+export const statusPacienteConfig = {
+  "Internação": { label: "Internação", cor: "#3b82f6", icon: "🏥" },
+  "Alta": { label: "Alta", cor: "#10b981", icon: "✓" },
+  "Óbito": { label: "Óbito", cor: "#ef4444", icon: "⚠️" },
+  "Ouvidoria": { label: "Ouvidoria", cor: "#f59e0b", icon: "📋" },
+}
+

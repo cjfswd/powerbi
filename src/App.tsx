@@ -1,3 +1,4 @@
+import React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -11,8 +12,8 @@ import {
 } from "lucide-react"
 import {
   kpis, distribuicaoAssistencia, tipoProcedimento, distribuicaoMunicipio,
-  perfilSexo, valorPrestador, tipoAcomodacao, faturamentoMensal,
-  tipoGuia, areaPrestador, tipoDespesa
+  perfilSexo, valorOperadora, tipoAcomodacao, faturamentoMensal,
+  tipoGuia, areaPrestador, tipoDespesa, pacientes, statusPacienteConfig
 } from "@/data/mock"
 
 function formatCurrency(value: number) {
@@ -99,14 +100,14 @@ function KpiSection() {
         description="Sem glosas"
       />
       <KpiCard
-        title="Beneficiários"
-        value={kpis.beneficiariosDistintos.toString()}
+        title="Pacientes"
+        value={kpis.pacientesDistintos.toString()}
         icon={Users}
-        description="Beneficiários distintos"
+        description="Pacientes distintos"
       />
       <KpiCard
-        title="Custo Médio/Benef."
-        value={formatCompact(kpis.custoMedioBeneficiario)}
+        title="Custo Médio/Paciente"
+        value={formatCompact(kpis.custoMedioPaciente)}
         icon={Activity}
         variant="warning"
         description="Alta complexidade"
@@ -257,21 +258,21 @@ function SexoChart() {
   )
 }
 
-function PrestadorChart() {
-  const total = valorPrestador.reduce((s, p) => s + p.valor, 0)
+function OperadoraChart() {
+  const total = valorOperadora.reduce((s, p) => s + p.valor, 0)
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Valor por Prestador</CardTitle>
+        <CardTitle className="text-base">Valor por Operadora</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {valorPrestador.map((p, i) => {
+          {valorOperadora.map((p, i) => {
             const pct = ((p.valor / total) * 100).toFixed(1)
             return (
               <div key={i} className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="font-medium truncate max-w-[200px]">{p.prestador}</span>
+                  <span className="font-medium truncate max-w-[200px]">{p.operadora}</span>
                   <span className="text-muted-foreground">{pct}%</span>
                 </div>
                 <div className="h-3 rounded-full bg-muted overflow-hidden">
@@ -307,8 +308,8 @@ function AcomodacaoChart() {
               outerRadius={80}
               paddingAngle={4}
               dataKey="valor"
-              nameKey="tipo"
-              label={(props: any) => `${props.tipo} ${((props.percent ?? 0) * 100).toFixed(0)}%`}
+              nameKey="label"
+              label={(props: any) => `${props.label} ${((props.percent ?? 0) * 100).toFixed(0)}%`}
             >
               {tipoAcomodacao.map((entry, index) => (
                 <Cell key={index} fill={entry.cor} />
@@ -393,6 +394,171 @@ function ProcedimentoTable() {
   )
 }
 
+function AnaliticoPacientes() {
+  const [municipioFilter, setMunicipioFilter] = React.useState<string>("todos")
+  const [statusFilter, setStatusFilter] = React.useState<string>("todos")
+
+  const municipios = ["todos", ...new Set(pacientes.map(p => p.municipio))]
+  const statusList = ["todos", ...Object.keys(statusPacienteConfig)]
+
+  const pacientesFiltrados = pacientes.filter(p => {
+    const municipioOk = municipioFilter === "todos" || p.municipio === municipioFilter
+    const statusOk = statusFilter === "todos" || p.status === statusFilter
+    return municipioOk && statusOk
+  })
+
+  const custoTotal = pacientesFiltrados.reduce((s, p) => s + p.custo, 0)
+  const custoPorStatus = statusList.slice(1).map(status => ({
+    status,
+    quantidade: pacientesFiltrados.filter(p => p.status === status).length,
+    custo: pacientesFiltrados.filter(p => p.status === status).reduce((s, p) => s + p.custo, 0),
+  }))
+
+  return (
+    <div className="space-y-6">
+      {/* Filtros */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardContent className="pt-6">
+            <label className="text-sm font-medium mb-2 block">Filtrar por Município</label>
+            <select
+              value={municipioFilter}
+              onChange={(e) => setMunicipioFilter(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md bg-background text-foreground cursor-pointer"
+            >
+              {municipios.map(m => (
+                <option key={m} value={m}>
+                  {m === "todos" ? "Todos os Municípios" : m}
+                </option>
+              ))}
+            </select>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <label className="text-sm font-medium mb-2 block">Filtrar por Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md bg-background text-foreground cursor-pointer"
+            >
+              {statusList.map(s => (
+                <option key={s} value={s}>
+                  {s === "todos" ? "Todos os Status" : statusPacienteConfig[s as keyof typeof statusPacienteConfig]?.label || s}
+                </option>
+              ))}
+            </select>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* KPIs de Filtro */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground">Pacientes</p>
+            <p className="text-2xl font-bold">{pacientesFiltrados.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground">Custo Total</p>
+            <p className="text-2xl font-bold">{formatCompact(custoTotal)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground">Custo Médio</p>
+            <p className="text-2xl font-bold">
+              {pacientesFiltrados.length > 0 ? formatCompact(custoTotal / pacientesFiltrados.length) : "R$ 0"}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground">Acomodação ID</p>
+            <p className="text-2xl font-bold">
+              {pacientesFiltrados.filter(p => p.acomodacao === "ID").length}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tabela de Pacientes */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Detalhamento por Paciente</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Paciente</TableHead>
+                <TableHead>Município</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Acomodação</TableHead>
+                <TableHead>Operadora</TableHead>
+                <TableHead className="text-right">Custo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pacientesFiltrados.map(p => {
+                const config = statusPacienteConfig[p.status as keyof typeof statusPacienteConfig]
+                return (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-medium">{p.nome}</TableCell>
+                    <TableCell>{p.municipio}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{config?.icon}</span>
+                        <span className="px-2 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: config?.cor + "20", color: config?.cor }}>
+                          {config?.label}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="px-2 py-1 rounded-md bg-muted text-xs font-medium">
+                        {p.acomodacao}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm truncate max-w-[180px]">{p.operadora}</TableCell>
+                    <TableCell className="text-right font-medium">{formatCurrency(p.custo)}</TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Resumo por Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Resumo por Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {custoPorStatus.map(item => {
+              const config = statusPacienteConfig[item.status as keyof typeof statusPacienteConfig]
+              return (
+                <div key={item.status} className="p-4 rounded-lg border" style={{ borderColor: config?.cor + "40" }}>
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-2xl">{config?.icon}</span>
+                    <span className="font-medium">{config?.label}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Pacientes: {item.quantidade}</p>
+                  <p className="text-lg font-bold mt-2">{formatCurrency(item.custo)}</p>
+                </div>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 function App() {
   return (
     <div className="min-h-screen bg-muted/30">
@@ -419,10 +585,11 @@ function App() {
         {/* Tabs */}
         <Tabs defaultValue="visao-geral">
           <TabsList>
-            <TabsTrigger value="visao-geral">Visao Geral</TabsTrigger>
+            <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
             <TabsTrigger value="procedimentos">Procedimentos</TabsTrigger>
-            <TabsTrigger value="geografico">Geografico</TabsTrigger>
-            <TabsTrigger value="prestadores">Prestadores</TabsTrigger>
+            <TabsTrigger value="geografico">Geográfico</TabsTrigger>
+            <TabsTrigger value="operadoras">Operadoras</TabsTrigger>
+            <TabsTrigger value="analitico">Analítico</TabsTrigger>
           </TabsList>
 
           {/* Visao Geral */}
@@ -484,29 +651,29 @@ function App() {
             </Card>
           </TabsContent>
 
-          {/* Prestadores */}
-          <TabsContent value="prestadores" className="space-y-6">
+          {/* Operadoras */}
+          <TabsContent value="operadoras" className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
-              <PrestadorChart />
+              <OperadoraChart />
               <AcomodacaoChart />
             </div>
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Detalhamento por Prestador</CardTitle>
+                <CardTitle className="text-base">Detalhamento por Operadora</CardTitle>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Prestador</TableHead>
+                      <TableHead>Operadora</TableHead>
                       <TableHead className="text-right">Valor Pago</TableHead>
                       <TableHead className="text-right">% do Total</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {valorPrestador.map((p, i) => (
+                    {valorOperadora.map((p, i) => (
                       <TableRow key={i}>
-                        <TableCell className="font-medium">{p.prestador}</TableCell>
+                        <TableCell className="font-medium">{p.operadora}</TableCell>
                         <TableCell className="text-right">{formatCurrency(p.valor)}</TableCell>
                         <TableCell className="text-right">
                           {((p.valor / kpis.valorTotalPago) * 100).toFixed(1)}%
@@ -522,6 +689,13 @@ function App() {
                 </Table>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Analítico */}
+          <TabsContent value="analitico" className="space-y-6">
+            <div className="grid gap-4">
+              <AnaliticoPacientes />
+            </div>
           </TabsContent>
         </Tabs>
       </main>
