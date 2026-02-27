@@ -8,7 +8,7 @@ import {
 } from "recharts"
 import {
   DollarSign, Users, TrendingUp, AlertTriangle, Building2, MapPin,
-  Activity, FileText, Home
+  Activity, FileText, Home, ChevronDown, ChevronUp
 } from "lucide-react"
 import {
   kpis, distribuicaoAssistencia, tipoProcedimento, distribuicaoMunicipio,
@@ -397,14 +397,18 @@ function ProcedimentoTable() {
 function AnaliticoPacientes() {
   const [municipioFilter, setMunicipioFilter] = React.useState<string>("todos")
   const [statusFilter, setStatusFilter] = React.useState<string>("todos")
+  const [operadoraFilter, setOperadoraFilter] = React.useState<string>("todas")
+  const [expandedPatientId, setExpandedPatientId] = React.useState<number | null>(null)
 
   const municipios = ["todos", ...new Set(pacientes.map(p => p.municipio))]
   const statusList = ["todos", ...Object.keys(statusPacienteConfig)]
+  const operadoras = ["todas", ...new Set(pacientes.map(p => p.operadora))]
 
   const pacientesFiltrados = pacientes.filter(p => {
     const municipioOk = municipioFilter === "todos" || p.municipio === municipioFilter
     const statusOk = statusFilter === "todos" || p.status === statusFilter
-    return municipioOk && statusOk
+    const operadoraOk = operadoraFilter === "todas" || p.operadora === operadoraFilter
+    return municipioOk && statusOk && operadoraOk
   })
 
   const custoTotal = pacientesFiltrados.reduce((s, p) => s + p.custo, 0)
@@ -417,7 +421,7 @@ function AnaliticoPacientes() {
   return (
     <div className="space-y-6">
       {/* Filtros */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardContent className="pt-6">
             <label className="text-sm font-medium mb-2 block">Filtrar por Município</label>
@@ -446,6 +450,23 @@ function AnaliticoPacientes() {
               {statusList.map(s => (
                 <option key={s} value={s}>
                   {s === "todos" ? "Todos os Status" : statusPacienteConfig[s as keyof typeof statusPacienteConfig]?.label || s}
+                </option>
+              ))}
+            </select>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <label className="text-sm font-medium mb-2 block">Filtrar por Operadora</label>
+            <select
+              value={operadoraFilter}
+              onChange={(e) => setOperadoraFilter(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md bg-background text-foreground cursor-pointer"
+            >
+              {operadoras.map(o => (
+                <option key={o} value={o}>
+                  {o === "todas" ? "Todas as Operadoras" : o}
                 </option>
               ))}
             </select>
@@ -494,6 +515,7 @@ function AnaliticoPacientes() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8"></TableHead>
                 <TableHead>Paciente</TableHead>
                 <TableHead>Município</TableHead>
                 <TableHead>Status</TableHead>
@@ -505,26 +527,57 @@ function AnaliticoPacientes() {
             <TableBody>
               {pacientesFiltrados.map(p => {
                 const config = statusPacienteConfig[p.status as keyof typeof statusPacienteConfig]
+                const isExpanded = expandedPatientId === p.id
+                const hasHours = p.acomodacao === "ID" && (p as any).horasAtendimento
+
                 return (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-medium">{p.nome}</TableCell>
-                    <TableCell>{p.municipio}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{config?.icon}</span>
-                        <span className="px-2 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: config?.cor + "20", color: config?.cor }}>
-                          {config?.label}
+                  <React.Fragment key={p.id}>
+                    <TableRow
+                      className={hasHours ? "cursor-pointer hover:bg-muted/50" : ""}
+                      onClick={() => hasHours && setExpandedPatientId(isExpanded ? null : p.id)}
+                    >
+                      <TableCell className="w-8">
+                        {hasHours && (
+                          isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">{p.nome}</TableCell>
+                      <TableCell>{p.municipio}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{config?.icon}</span>
+                          <span className="px-2 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: config?.cor + "20", color: config?.cor }}>
+                            {config?.label}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="px-2 py-1 rounded-md bg-muted text-xs font-medium">
+                          {p.acomodacao}
                         </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="px-2 py-1 rounded-md bg-muted text-xs font-medium">
-                        {p.acomodacao}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-sm truncate max-w-[180px]">{p.operadora}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(p.custo)}</TableCell>
-                  </TableRow>
+                      </TableCell>
+                      <TableCell className="text-sm truncate max-w-[180px]">{p.operadora}</TableCell>
+                      <TableCell className="text-right font-medium">{formatCurrency(p.custo)}</TableCell>
+                    </TableRow>
+
+                    {isExpanded && hasHours && (
+                      <TableRow className="bg-muted/30">
+                        <TableCell colSpan={7} className="p-4">
+                          <div className="space-y-3">
+                            <p className="font-medium text-sm">Detalhamento por Horas de Atendimento:</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              {Object.entries((p as any).horasAtendimento || {}).map(([horas, valor]) => (
+                                <div key={horas} className="p-3 rounded-lg border bg-background">
+                                  <p className="text-xs text-muted-foreground mb-1">{horas}</p>
+                                  <p className="font-bold text-sm">{formatCurrency(valor as number)}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
                 )
               })}
             </TableBody>
