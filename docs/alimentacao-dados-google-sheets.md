@@ -4,90 +4,98 @@
 
 ---
 
-## Arquitetura em 3 Camadas
-
-A planilha é organizada em três tipos de abas com responsabilidades distintas:
+## Arquitetura em 4 Camadas
 
 ```
 CAMADA 1 — ENTRADA (dados brutos, preenchidos pelo usuário)
-├── Pacientes               ← cadastro dos pacientes
-└── Procedimentos_Realizados ← lançamentos por paciente/mês (tabela de relacionamento)
+├── Pacientes                 ← cadastro dos pacientes
+└── Procedimentos_Realizados  ← lançamentos mensais por paciente (N:N)
 
-CAMADA 2 — REFERÊNCIA (listas pré-definidas, fonte dos dropdowns)
+CAMADA 2 — LOGS (histórico append-only, nunca editar — só acrescentar)
+├── Log_Status_Paciente       ← cada mudança de status clínico
+└── Log_Pacote_Horas          ← cada mudança de pacote (3h/6h/12h/24h)
+
+CAMADA 3 — REFERÊNCIA (listas pré-definidas, fonte dos dropdowns)
 ├── REF_Operadoras
 ├── REF_Procedimentos
 ├── REF_Status
 ├── REF_Sexo
-└── REF_Acomodacao
+├── REF_Acomodacao
+└── REF_PacoteHoras
 
-CAMADA 3 — AGREGAÇÃO (fórmulas automáticas, lidas pelo dashboard)
+CAMADA 4 — AGREGAÇÃO (fórmulas automáticas, lidas pelo dashboard)
 ├── AGG_Municipios
 ├── AGG_Operadoras
 ├── AGG_Sexo
 ├── AGG_Procedimentos
 ├── AGG_Faturamento_Mensal
-└── AGG_Acomodacao
+├── AGG_Acomodacao
+└── AGG_PacoteHoras
 ```
 
-> **Regra fundamental:** nenhum valor de agregação é digitado manualmente. Toda aba `AGG_*` é composta exclusivamente por fórmulas que recalculam automaticamente ao adicionar dados nas abas de entrada.
+> **Regra fundamental:** as abas `AGG_*` são 100% fórmulas. As abas `Log_*` são append-only — jamais edite ou delete uma linha existente.
 
 ---
 
 ## Diagrama de Relacionamento
 
 ```
-REF_Operadoras ──────────────────────────────┐
-REF_Status ──────────────────────────────┐   │
-REF_Sexo ────────────────────────────┐   │   │
-REF_Acomodacao ──────────────────┐   │   │   │
-                                 ▼   ▼   ▼   ▼
-                            ┌─────────────────────┐
-                            │      Pacientes       │
-                            │  id (PK)             │
-                            │  nome                │
-                            │  municipio (texto)   │
-                            │  sexo ▼ dropdown     │
-                            │  status ▼ dropdown   │
-                            │  operadora ▼ dropdown│
-                            │  acomodacao ▼ dropdown│
-                            │  data_entrada        │
-                            │  data_saida          │
-                            └──────────┬───────────┘
-                                       │ 1
-                                       │ N
-                            ┌──────────▼───────────┐
-                            │ Procedimentos_        │
-                            │ Realizados            │
-                            │  id (PK)              │
-                            │  paciente_id (FK) ────┘
-                            │  procedimento ▼ dropdown
-                            │  mes                  │
-                            │  ano                  │
-                            │  valor                │
-                            │  horas_3h             │
-                            │  horas_6h             │
-                            │  horas_12h            │
-                            │  horas_24h            │
-                            │  ── campos auto ──    │
-                            │  operadora_auto  ←────┤ VLOOKUP
-                            │  municipio_auto  ←────┤ VLOOKUP
-                            │  sexo_auto       ←────┤ VLOOKUP
-                            │  acomodacao_auto ←────┘ VLOOKUP
-                            └───────────────────────┘
-                                       │
-                              SUMIFS / COUNTIFS
-                                       │
-                  ┌────────────────────▼──────────────────────┐
-                  │               AGG_* (fórmulas)             │
-                  │  Municipios · Operadoras · Sexo            │
-                  │  Procedimentos · Faturamento · Acomodacao  │
-                  └────────────────────────────────────────────┘
-                                       │
-                                  Dashboard
+REF_Operadoras ─────────────────────────────────────────┐
+REF_Status ─────────────────────────────────────────┐   │
+REF_Sexo ───────────────────────────────────────┐   │   │
+REF_Acomodacao ──────────────────────────────┐  │   │   │
+REF_PacoteHoras ──────────────────────────┐  │  │   │   │
+                                          ▼  ▼  ▼   ▼   ▼
+                                   ┌──────────────────────────┐
+                                   │         Pacientes         │
+                                   │  id (PK)                  │
+                                   │  nome                     │
+                                   │  municipio (texto livre)  │
+                                   │  data_nascimento          │
+                                   │  sexo ▼ dropdown          │
+                                   │  operadora ▼ dropdown     │
+                                   │  acomodacao ▼ dropdown    │
+                                   │  data_entrada             │
+                                   │  data_saida               │
+                                   │  ── campos fórmula ──     │
+                                   │  status_atual    ←──────────── Log_Status_Paciente
+                                   │  pacote_horas_atual ←───────── Log_Pacote_Horas
+                                   └───────────┬──────────────┘
+                                               │ 1
+                                          ┌────┴────┐ N
+                          ┌───────────────▼──┐   ┌──▼──────────────────────┐
+                          │ Log_Status_       │   │ Log_Pacote_Horas         │
+                          │ Paciente          │   │  id (PK)                 │
+                          │  id (PK)          │   │  paciente_id (FK)        │
+                          │  paciente_id (FK) │   │  data_evento             │
+                          │  data_evento      │   │  pacote ▼ dropdown       │
+                          │  status ▼ dropdown│   │  observacao              │
+                          │  observacao       │   └──────────────────────────┘
+                          └───────────────────┘
+                                               │ 1
+                                               │ N
+                          ┌────────────────────▼─────────────────────────────┐
+                          │            Procedimentos_Realizados               │
+                          │  id (PK)                                          │
+                          │  paciente_id (FK)                                 │
+                          │  procedimento ▼ dropdown                          │
+                          │  mes ▼ dropdown                                   │
+                          │  ano                                              │
+                          │  quantidade                                       │
+                          │  valor_unitario                                   │
+                          │  valor_total [fórmula = quantidade * unit]        │
+                          │  ── campos auto via VLOOKUP ──                    │
+                          │  operadora_auto    ← Pacientes                    │
+                          │  municipio_auto    ← Pacientes                    │
+                          │  sexo_auto         ← Pacientes                    │
+                          │  acomodacao_auto   ← Pacientes                    │
+                          │  pacote_auto       ← Pacientes.pacote_horas_atual │
+                          └───────────────────────┬──────────────────────────┘
+                                                  │ SUMIFS / COUNTIFS / SUMIF
+                          ┌───────────────────────▼──────────────────────────┐
+                          │                   AGG_* (fórmulas)                │
+                          └──────────────────────────────────────────────────┘
 ```
-
-**Por que campos `_auto` em `Procedimentos_Realizados`?**
-Ao denormalizar operadora, município, sexo e acomodação na tabela de lançamentos via VLOOKUP, qualquer agregação cruzada (ex: *"valor de Fisioterapia para pacientes Femininos da Camperj em Nova Iguaçu"*) pode ser feita com um único `SUMIFS`, sem joins complexos.
 
 ---
 
@@ -95,85 +103,156 @@ Ao denormalizar operadora, município, sexo e acomodação na tabela de lançame
 
 ### `Pacientes`
 
-Cadastro mestre. Uma linha por paciente. Campos controlados usam dropdown (Validação de Dados → ver seção de configuração).
+Cadastro mestre. **Uma linha por paciente.** Campos com `▼` usam dropdown. Campos marcados como `[fórmula]` nunca são digitados manualmente.
 
 | Coluna | Tipo | Entrada | Descrição |
 |---|---|---|---|
 | `id` | Inteiro | Manual | Identificador único, sequencial (1, 2, 3…) |
 | `nome` | Texto | Manual | Nome completo do paciente |
-| `municipio` | Texto | **Livre** | Município de residência — o usuário digita |
+| `municipio` | Texto | **Livre** | Município — o usuário digita (ver nota abaixo) |
 | `data_nascimento` | Data | Manual | Formato `DD/MM/AAAA` |
-| `sexo` | Texto | **Dropdown** | Fonte: `REF_Sexo!A:A` |
-| `status` | Texto | **Dropdown** | Fonte: `REF_Status!A:A` |
-| `operadora` | Texto | **Dropdown** | Fonte: `REF_Operadoras!B:B` |
-| `acomodacao` | Texto | **Dropdown** | Fonte: `REF_Acomodacao!A:A` |
+| `sexo` | Texto | **Dropdown** | Fonte: `REF_Sexo` |
+| `operadora` | Texto | **Dropdown** | Fonte: `REF_Operadoras` |
+| `acomodacao` | Texto | **Dropdown** | Fonte: `REF_Acomodacao` (`ID` ou `AD`) |
 | `data_entrada` | Data | Manual | Data de início do atendimento |
-| `data_saida` | Data | Opcional | Vazio = paciente ainda ativo |
+| `data_saida` | Data | Opcional | Vazio = paciente ativo |
+| `status_atual` | Texto | **[fórmula]** | Último status do `Log_Status_Paciente` |
+| `pacote_horas_atual` | Texto | **[fórmula]** | Último pacote do `Log_Pacote_Horas` |
 
-> **Município é campo livre** pois a lista de municípios é extensa e variável. Os dados geográficos no dashboard são agrupados dinamicamente pelo valor digitado — portanto a grafia deve ser consistente (ex: sempre "Nova Iguaçu", nunca "Nova iguaçu" ou "N. Iguaçu").
+> **Município é campo livre** — a lista é extensa e variável. Mantenha grafia consistente em todos os cadastros (ex: sempre "Nova Iguaçu", nunca "N. Iguaçu"). O dashboard agrupa pelos valores digitados.
+
+**Fórmulas das colunas derivadas (copiar para toda a coluna):**
+
+```
+status_atual (coluna K, linha 2):
+=IFERROR(
+  VLOOKUP(
+    MAXIFS(Log_Status_Paciente!$C:$C, Log_Status_Paciente!$B:$B, A2),
+    FILTER(Log_Status_Paciente!$C:$D, Log_Status_Paciente!$B:$B=A2),
+    2, 0
+  ),
+  "Sem registro"
+)
+
+pacote_horas_atual (coluna L, linha 2):
+=IFERROR(
+  VLOOKUP(
+    MAXIFS(Log_Pacote_Horas!$C:$C, Log_Pacote_Horas!$B:$B, A2),
+    FILTER(Log_Pacote_Horas!$C:$D, Log_Pacote_Horas!$B:$B=A2),
+    2, 0
+  ),
+  "Não definido"
+)
+```
+
+Como funcionam: `MAXIFS` encontra a **data mais recente** do paciente nos logs. `FILTER` isola apenas as linhas daquele paciente. `VLOOKUP` retorna o valor registrado naquela data. O resultado sempre reflete o estado atual sem editar o cadastro.
 
 **Exemplo:**
 ```
-id | nome          | municipio    | data_nasc  | sexo      | status    | operadora          | acomodacao | data_entrada | data_saida
-1  | João Silva    | Nova Iguaçu  | 12/03/1948 | Masculino | Internação| Unimed Nova Iguaçu | ID         | 01/01/2025   |
-2  | Maria Santos  | Rio de Janeiro| 05/07/1962| Feminino  | Alta      | Camperj            | AD         | 15/01/2025   | 20/02/2025
+id | nome         | municipio    | nasc       | sexo      | operadora          | acomod | entrada    | saida | status_atual | pacote_atual
+1  | João Silva   | Nova Iguaçu  | 12/03/1948 | Masculino | Unimed Nova Iguaçu | ID     | 01/01/2025 |       | Internação   | 24h
+2  | Maria Santos | Rio de Janeiro| 05/07/1962| Feminino  | Camperj            | AD     | 15/01/2025 | ...   | Alta         | 12h
 ```
 
 ---
 
 ### `Procedimentos_Realizados`
 
-Tabela de relacionamento paciente ↔ procedimento. Um lançamento por procedimento por mês por paciente. Esta aba é a **única fonte de verdade financeira** — todos os valores do dashboard derivam dela.
+Tabela de relacionamento paciente ↔ procedimento. **Um lançamento por procedimento por mês por paciente.** Fonte financeira do dashboard.
 
 **Colunas de entrada (preenchidas pelo usuário):**
 
 | Coluna | Tipo | Entrada | Descrição |
 |---|---|---|---|
 | `id` | Inteiro | Manual | Identificador único do lançamento |
-| `paciente_id` | Inteiro | Manual | FK → `Pacientes!id` |
-| `procedimento` | Texto | **Dropdown** | Fonte: `REF_Procedimentos!B:B` |
-| `mes` | Texto | **Dropdown** | `Jan`, `Fev`, `Mar` … `Dez` |
+| `paciente_id` | Inteiro | Manual | FK → `Pacientes.id` |
+| `procedimento` | Texto | **Dropdown** | Fonte: `REF_Procedimentos` |
+| `mes` | Texto | **Dropdown** | `Jan` … `Dez` |
 | `ano` | Inteiro | Manual | Ex: `2025` |
-| `valor` | Decimal | Manual | Valor faturado neste lançamento (R$) |
-| `horas_3h` | Decimal | Opcional | Valor do turno 3h (só para acomodação ID) |
-| `horas_6h` | Decimal | Opcional | Valor do turno 6h |
-| `horas_12h` | Decimal | Opcional | Valor do turno 12h |
-| `horas_24h` | Decimal | Opcional | Valor do turno 24h |
+| `quantidade` | Inteiro | Manual | Nº de execuções do procedimento no mês |
+| `valor_unitario` | Decimal | Manual | Valor de uma execução (R$) |
 
-**Colunas automáticas (fórmulas — não editar):**
+**Colunas calculadas por fórmula (não editar):**
 
-Essas colunas buscam dados do cadastro do paciente via `VLOOKUP` ou `INDEX+MATCH`, tornando cruzamentos possíveis com `SUMIFS`.
-
-| Coluna | Fórmula (linha 2) | Descrição |
+| Coluna | Fórmula | Descrição |
 |---|---|---|
-| `operadora_auto` | `=IFERROR(VLOOKUP(B2, Pacientes!$A:$G, 7, 0), "")` | Operadora do paciente |
+| `valor_total` | `=G2*H2` | `quantidade * valor_unitario` |
+| `operadora_auto` | `=IFERROR(VLOOKUP(B2, Pacientes!$A:$G, 6, 0), "")` | Operadora do paciente |
 | `municipio_auto` | `=IFERROR(VLOOKUP(B2, Pacientes!$A:$C, 3, 0), "")` | Município do paciente |
 | `sexo_auto` | `=IFERROR(VLOOKUP(B2, Pacientes!$A:$E, 5, 0), "")` | Sexo do paciente |
-| `acomodacao_auto` | `=IFERROR(VLOOKUP(B2, Pacientes!$A:$H, 8, 0), "")` | Acomodação do paciente |
+| `acomodacao_auto` | `=IFERROR(VLOOKUP(B2, Pacientes!$A:$G, 7, 0), "")` | Acomodação do paciente |
+| `pacote_auto` | `=IFERROR(VLOOKUP(B2, Pacientes!$A:$L, 12, 0), "")` | Pacote de horas vigente |
 
-> Ajuste os índices de coluna (`7`, `3`, `5`, `8`) conforme a ordem real das colunas na aba `Pacientes`. Recomendado: fixar as fórmulas nas primeiras linhas e usar **Ctrl+D** para copiar para baixo ao adicionar novos lançamentos.
+> Os índices do VLOOKUP (6, 3, 5…) dependem da ordem final das colunas em `Pacientes`. Ajuste conforme o layout real da planilha.
 
 **Exemplo:**
 ```
-id | pac_id | procedimento     | mes | ano  | valor     | h_3h     | h_6h  | h_12h  | h_24h    | operadora_auto      | municipio_auto | sexo_auto | acomod_auto
-1  | 1      | Pacote Internação| Jan | 2025 | 45230.50  | 5230.50  | 8500  | 15000  | 16500    | Unimed Nova Iguaçu  | Nova Iguaçu    | Masculino | ID
-2  | 1      | Fisioterapia     | Jan | 2025 | 3200.00   |          |       |        |          | Unimed Nova Iguaçu  | Nova Iguaçu    | Masculino | ID
-3  | 2      | Pacote Internação| Jan | 2025 | 38500.00  |          |       |        |          | Camperj             | Rio de Janeiro | Feminino  | AD
+id | pac_id | procedimento      | mes | ano  | qtd | unit      | total     | operadora_auto      | municipio_auto | sexo_auto | acomod | pacote
+1  | 1      | Pacote Internação | Jan | 2025 | 1   | 40000.00  | 40000.00  | Unimed Nova Iguaçu  | Nova Iguaçu    | Masculino | ID     | 24h
+2  | 1      | Fisioterapia      | Jan | 2025 | 8   | 400.00    | 3200.00   | Unimed Nova Iguaçu  | Nova Iguaçu    | Masculino | ID     | 24h
+3  | 1      | Fisioterapia      | Fev | 2025 | 6   | 400.00    | 2400.00   | Unimed Nova Iguaçu  | Nova Iguaçu    | Masculino | ID     | 24h
+4  | 2      | Consulta Médica   | Jan | 2025 | 2   | 350.00    | 700.00    | Camperj             | Rio de Janeiro | Feminino  | AD     | 12h
 ```
 
 ---
 
-## Camada 2 — Abas de Referência
+## Camada 2 — Logs de Eventos
 
-Estas abas são as **fontes dos dropdowns**. O usuário configura a Validação de Dados apontando para elas. Novos itens são adicionados nas listas sem necessidade de alterar fórmulas.
+Tabelas append-only. Cada linha registra um evento. **Nunca edite ou delete linhas existentes.** Para corrigir um erro, adicione uma nova linha com o valor correto e uma observação.
+
+### `Log_Status_Paciente`
+
+Toda mudança de status clínico gera uma nova linha. A coluna `status_atual` em `Pacientes` sempre reflete a linha com a data mais recente.
+
+| Coluna | Tipo | Entrada | Descrição |
+|---|---|---|---|
+| `id` | Inteiro | Manual | Sequencial |
+| `paciente_id` | Inteiro | Manual | FK → `Pacientes.id` |
+| `data_evento` | Data | Manual | Data da mudança (`DD/MM/AAAA`) |
+| `status` | Texto | **Dropdown** | Fonte: `REF_Status` |
+| `observacao` | Texto | Opcional | Motivo, CID, nome do profissional etc. |
+
+**Exemplo:**
+```
+id | pac_id | data_evento | status     | observacao
+1  | 1      | 01/01/2025  | Internação | Admissão inicial
+2  | 1      | 10/03/2025  | Ouvidoria  | Reclamação familiar — aguardando retorno
+3  | 1      | 15/03/2025  | Internação | Caso resolvido, retorno ao protocolo
+4  | 2      | 15/01/2025  | Internação | Admissão inicial
+5  | 2      | 20/02/2025  | Alta       | Alta hospitalar — critérios atingidos
+```
+
+**Como ler:** o status atual do paciente 1 é `Internação` (linha 3, data mais recente). O do paciente 2 é `Alta` (linha 5). O log completo preserva toda a trajetória.
+
+---
+
+### `Log_Pacote_Horas`
+
+Toda mudança de pacote de cuidado (3h → 12h, por exemplo) gera uma nova linha.
+
+| Coluna | Tipo | Entrada | Descrição |
+|---|---|---|---|
+| `id` | Inteiro | Manual | Sequencial |
+| `paciente_id` | Inteiro | Manual | FK → `Pacientes.id` |
+| `data_evento` | Data | Manual | Data de início do novo pacote |
+| `pacote` | Texto | **Dropdown** | Fonte: `REF_PacoteHoras` (`3h`, `6h`, `12h`, `24h`) |
+| `observacao` | Texto | Opcional | Motivo da mudança, médico responsável etc. |
+
+**Exemplo:**
+```
+id | pac_id | data_evento | pacote | observacao
+1  | 1      | 01/01/2025  | 12h    | Pacote inicial de admissão
+2  | 1      | 14/02/2025  | 24h    | Piora clínica — necessidade de monitoramento contínuo
+3  | 2      | 15/01/2025  | 12h    | Pacote inicial de admissão
+```
+
+**Como ler:** o pacote atual do paciente 1 é `24h` (evento mais recente). Toda a progressão está preservada para análise histórica.
+
+---
+
+## Camada 3 — Abas de Referência
 
 ### `REF_Operadoras`
-
-| Coluna | Exemplo |
-|---|---|
-| `id` | 1 |
-| `nome` | Unimed Nova Iguaçu |
-
 ```
 id | nome
 1  | Unimed Nova Iguaçu
@@ -181,26 +260,17 @@ id | nome
 ```
 
 ### `REF_Procedimentos`
-
-| Coluna | Exemplo | Descrição |
-|---|---|---|
-| `id` | 1 | Identificador |
-| `nome` | Pacote Internação | Nome exibido no dropdown e nas tabelas |
-| `categoria` | Internação | Categoria de assistência (usado na `AGG_Acomodacao`) |
-
 ```
-id | nome                    | categoria
-1  | Pacote Internação        | Internação
-2  | Fisioterapia            | Reabilitação
-3  | Terapia c/ Método       | Reabilitação
-4  | Consulta Médica         | Assistência
-5  | Enfermagem 24h          | Internação
+id | nome                  | categoria
+1  | Pacote Internação      | Internação
+2  | Fisioterapia          | Reabilitação
+3  | Terapia c/ Método     | Reabilitação
+4  | Consulta Médica       | Assistência
+5  | Enfermagem 24h        | Internação
 ```
 
 ### `REF_Status`
-
 ```
-valor
 Internação
 Alta
 Óbito
@@ -208,64 +278,67 @@ Ouvidoria
 ```
 
 ### `REF_Sexo`
-
 ```
-valor
 Masculino
 Feminino
 ```
 
 ### `REF_Acomodacao`
+```
+codigo | label
+ID     | Internação Domiciliar
+AD     | Atendimento Domiciliar
+```
 
-| `codigo` | `label` |
-|---|---|
-| ID | Internação Domiciliar |
-| AD | Atendimento Domiciliar |
+### `REF_PacoteHoras`
+```
+valor | label
+3h    | Pacote 3 horas/dia
+6h    | Pacote 6 horas/dia
+12h   | Pacote 12 horas/dia
+24h   | Pacote 24 horas/dia (integral)
+```
 
 ---
 
-### Como Configurar Validação de Dados (Dropdowns)
+### Configuração de Validação de Dados (Dropdowns)
 
-1. Selecione a coluna de destino (ex: coluna `sexo` em `Pacientes`, excluindo o cabeçalho)
-2. Menu **Dados → Validação de dados → Adicionar regra**
-3. Em **Critérios**, selecione **Menu suspenso (de um intervalo)**
-4. Insira o intervalo da aba de referência: ex: `REF_Sexo!A2:A100`
-5. Marque **Mostrar aviso** ou **Rejeitar entrada** para evitar valores fora da lista
-6. Salvar
+1. Selecione a coluna de destino (ex: `Log_Status_Paciente!D:D`, sem o cabeçalho)
+2. **Dados → Validação de dados → Adicionar regra**
+3. Critérios: **Menu suspenso (de um intervalo)**
+4. Insira o intervalo da REF correspondente
+5. **Rejeitar entrada** para garantir apenas valores da lista
 
 | Campo | Intervalo de origem |
 |---|---|
 | `Pacientes.sexo` | `REF_Sexo!A2:A3` |
-| `Pacientes.status` | `REF_Status!A2:A5` |
 | `Pacientes.operadora` | `REF_Operadoras!B2:B100` |
 | `Pacientes.acomodacao` | `REF_Acomodacao!A2:A3` |
+| `Log_Status_Paciente.status` | `REF_Status!A2:A10` |
+| `Log_Pacote_Horas.pacote` | `REF_PacoteHoras!A2:A5` |
 | `Procedimentos_Realizados.procedimento` | `REF_Procedimentos!B2:B100` |
 | `Procedimentos_Realizados.mes` | Lista fixa: `Jan,Fev,Mar,Abr,Mai,Jun,Jul,Ago,Set,Out,Nov,Dez` |
 
 ---
 
-## Camada 3 — Abas de Agregação (Fórmulas)
+## Camada 4 — Abas de Agregação (Fórmulas)
 
-Todas as abas `AGG_*` são lidas pelo dashboard. **Nenhuma célula de valor é editada manualmente** — somente as colunas de rótulo/chave (ex: o nome do município na coluna A) são fixas.
-
-Convenção de nomenclatura usada nas fórmulas abaixo:
-- `PAC` = aba `Pacientes`
-- `PR` = aba `Procedimentos_Realizados`
+Convenções nas fórmulas:
+- `PAC` = `Pacientes`
+- `PR` = `Procedimentos_Realizados`
+- `LS` = `Log_Status_Paciente`
+- `LP` = `Log_Pacote_Horas`
 
 ---
 
 ### `AGG_Municipios`
 
-Agrega pacientes e valores por município. O dashboard lê esta aba para o gráfico geográfico.
-
-| Coluna | Conteúdo | Fórmula (linha 2) |
-|---|---|---|
-| `municipio` | Fixo (digitado uma vez) | — |
-| `qtd_pacientes` | Contagem de pacientes | `=COUNTIF(PAC!C:C, A2)` |
-| `valor_total` | Soma dos lançamentos | `=SUMIF(PR!municipio_auto, A2, PR!valor)` |
-| `percentual_valor` | Participação no total | `=IFERROR(C2/SUM(C$2:C$200)*100, 0)` |
-
-> Para municípios adicionais, basta adicionar uma nova linha com o nome e as fórmulas se ajustam. **Nunca delete linhas com municípios ativos.**
+| Coluna | Fórmula (linha 2) |
+|---|---|
+| `municipio` | Fixo (digitado uma vez) |
+| `qtd_pacientes` | `=COUNTIF(PAC!C:C, A2)` |
+| `valor_total` | `=SUMIF(PR!municipio_auto, A2, PR!valor_total)` |
+| `percentual_valor` | `=IFERROR(C2/SUM(C$2:C$200)*100, 0)` |
 
 ---
 
@@ -273,9 +346,9 @@ Agrega pacientes e valores por município. O dashboard lê esta aba para o gráf
 
 | Coluna | Fórmula (linha 2) |
 |---|---|
-| `operadora` | Fixo (ex: `=REF_Operadoras!B2`) |
-| `qtd_pacientes` | `=COUNTIF(PAC!G:G, A2)` |
-| `valor_total` | `=SUMIF(PR!operadora_auto, A2, PR!valor)` |
+| `operadora` | `=REF_Operadoras!B2` |
+| `qtd_pacientes` | `=COUNTIF(PAC!F:F, A2)` |
+| `valor_total` | `=SUMIF(PR!operadora_auto, A2, PR!valor_total)` |
 | `percentual_valor` | `=IFERROR(C2/SUM(C$2:C$200)*100, 0)` |
 
 ---
@@ -287,7 +360,7 @@ Agrega pacientes e valores por município. O dashboard lê esta aba para o gráf
 | `sexo` | Fixo (`Masculino` / `Feminino`) |
 | `qtd_pacientes` | `=COUNTIF(PAC!E:E, A2)` |
 | `percentual_pacientes` | `=IFERROR(B2/SUM(B$2:B$3)*100, 0)` |
-| `valor_total` | `=SUMIF(PR!sexo_auto, A2, PR!valor)` |
+| `valor_total` | `=SUMIF(PR!sexo_auto, A2, PR!valor_total)` |
 
 ---
 
@@ -295,29 +368,25 @@ Agrega pacientes e valores por município. O dashboard lê esta aba para o gráf
 
 | Coluna | Fórmula (linha 2) |
 |---|---|
-| `procedimento` | Fixo (ex: `=REF_Procedimentos!B2`) |
-| `valor_total` | `=SUMIF(PR!procedimento, A2, PR!valor)` |
-| `qtd_lancamentos` | `=COUNTIF(PR!procedimento, A2)` |
-| `percentual_valor` | `=IFERROR(B2/SUM(B$2:B$200)*100, 0)` |
+| `procedimento` | `=REF_Procedimentos!B2` |
+| `qtd_realizacoes` | `=SUMIF(PR!procedimento, A2, PR!quantidade)` |
+| `valor_total` | `=SUMIF(PR!procedimento, A2, PR!valor_total)` |
+| `valor_medio_unit` | `=IFERROR(C2/B2, 0)` |
+| `percentual_valor` | `=IFERROR(C2/SUM(C$2:C$200)*100, 0)` |
+
+> `qtd_realizacoes` soma a quantidade de execuções (ex: 8 sessões de fisioterapia), não apenas o número de linhas. Isso possibilita análise de frequência real de cada procedimento ao longo do tempo.
 
 ---
 
 ### `AGG_Faturamento_Mensal`
 
-O usuário mantém as colunas `mes` e `ano` (uma linha por mês). A coluna `valor` é calculada automaticamente.
-
 | Coluna | Fórmula (linha 2) |
 |---|---|
 | `mes` | Fixo (ex: `Jan`) |
 | `ano` | Fixo (ex: `2025`) |
-| `valor` | `=SUMIFS(PR!valor, PR!mes, A2, PR!ano, B2)` |
-
-```
-mes | ano  | valor  (calculado)
-Jan | 2025 | =SUMIFS(...)
-Fev | 2025 | =SUMIFS(...)
-Mar | 2025 | =SUMIFS(...)
-```
+| `valor_total` | `=SUMIFS(PR!valor_total, PR!mes, A2, PR!ano, B2)` |
+| `qtd_procedimentos` | `=SUMIFS(PR!quantidade, PR!mes, A2, PR!ano, B2)` |
+| `qtd_pacientes_ativos` | `=COUNTIFS(PR!mes, A2, PR!ano, B2, PR!paciente_id, ">"&0)` |
 
 ---
 
@@ -327,40 +396,57 @@ Mar | 2025 | =SUMIFS(...)
 |---|---|
 | `codigo` | Fixo (`ID` / `AD`) |
 | `label` | `=VLOOKUP(A2, REF_Acomodacao!A:B, 2, 0)` |
-| `qtd_pacientes` | `=COUNTIF(PAC!H:H, A2)` |
-| `valor_total` | `=SUMIF(PR!acomodacao_auto, A2, PR!valor)` |
+| `qtd_pacientes` | `=COUNTIF(PAC!G:G, A2)` |
+| `valor_total` | `=SUMIF(PR!acomodacao_auto, A2, PR!valor_total)` |
+
+---
+
+### `AGG_PacoteHoras`
+
+Distribuição atual dos pacientes por pacote de cuidado. Baseada no estado atual (`pacote_horas_atual` de `Pacientes`), não no histórico.
+
+| Coluna | Fórmula (linha 2) |
+|---|---|
+| `pacote` | `=REF_PacoteHoras!A2` |
+| `qtd_pacientes_ativos` | `=COUNTIF(PAC!L:L, A2)` |
+| `percentual` | `=IFERROR(B2/SUM(B$2:B$5)*100, 0)` |
+| `valor_total` | `=SUMIF(PR!pacote_auto, A2, PR!valor_total)` |
 
 ---
 
 ## Análises Cruzadas com SUMIFS
 
-Com os campos `_auto` em `Procedimentos_Realizados`, qualquer combinação de dimensões é possível diretamente no Sheets. Exemplos:
+Com os campos `_auto` em `Procedimentos_Realizados`, qualquer combinação de dimensões é direta:
 
 ```
-Valor de Fisioterapia para pacientes Femininos:
-=SUMIFS(PR!valor, PR!procedimento, "Fisioterapia", PR!sexo_auto, "Feminino")
+Fisioterapia para pacientes Femininos:
+=SUMIFS(PR!valor_total, PR!procedimento, "Fisioterapia", PR!sexo_auto, "Feminino")
 
-Valor total da Camperj em Nova Iguaçu em Janeiro/2025:
-=SUMIFS(PR!valor, PR!operadora_auto, "Camperj", PR!municipio_auto, "Nova Iguaçu", PR!mes, "Jan", PR!ano, 2025)
+Camperj em Nova Iguaçu em Jan/2025:
+=SUMIFS(PR!valor_total, PR!operadora_auto, "Camperj", PR!municipio_auto, "Nova Iguaçu", PR!mes, "Jan", PR!ano, 2025)
 
-Quantidade de pacientes Masculinos com acomodação ID:
-=COUNTIFS(PAC!sexo, "Masculino", PAC!acomodacao, "ID")
+Quantidade de sessões de Fisioterapia por operadora em Mar/2025:
+=SUMIFS(PR!quantidade, PR!procedimento, "Fisioterapia", PR!operadora_auto, "Unimed Nova Iguaçu", PR!mes, "Mar")
 
-Evolução mensal de um procedimento específico por operadora:
-=SUMIFS(PR!valor, PR!procedimento, "Pacote Internação", PR!operadora_auto, "Unimed Nova Iguaçu", PR!mes, "Mar", PR!ano, 2025)
+Evolução do pacote 24h ao longo dos meses (valor faturado):
+=SUMIFS(PR!valor_total, PR!pacote_auto, "24h", PR!mes, "Jan", PR!ano, 2025)
+
+Pacientes com status atual "Internação" no pacote "24h":
+=COUNTIFS(PAC!status_atual, "Internação", PAC!pacote_horas_atual, "24h")
+
+Histórico de mudanças de pacote de um paciente (contar eventos):
+=COUNTIF(LP!B:B, 1)  → nº de vezes que o paciente 1 mudou de pacote
 ```
 
 ---
 
 ## KPIs Calculados pelo Dashboard
 
-Não exigem aba própria — derivados das abas de agregação:
-
 | KPI | Origem | Cálculo |
 |---|---|---|
 | **Valor Total Pago** | `AGG_Operadoras` | `SUM(valor_total)` |
-| **Média Mensal** | `AGG_Faturamento_Mensal` | `Valor Total / COUNT(meses)` |
-| **Valor Total Glosado** | Futura coluna em `PR` | `SUM(glosa)` — a implementar |
+| **Média Mensal** | `AGG_Faturamento_Mensal` | `Valor Total / COUNT(meses com lançamento)` |
+| **Valor Total Glosado** | Futura coluna `glosa` em `PR` | `SUM(glosa)` |
 | **Pacientes Distintos** | `Pacientes` | `COUNTA(id) - 1` |
 | **Custo Médio/Paciente** | Calculado | `Valor Total / Pacientes Distintos` |
 
@@ -371,47 +457,54 @@ Não exigem aba própria — derivados das abas de agregação:
 | Aba Google Sheets | Aba no Dashboard | Componente |
 |---|---|---|
 | `Pacientes` | Analítico | `<AnaliticoPacientes />` |
-| `Procedimentos_Realizados` | Atendimento Horas | `<AtendimentoHorasChart />` |
+| `Procedimentos_Realizados` + `Log_Pacote_Horas` | Atendimento Horas | `<AtendimentoHorasChart />` |
 | `AGG_Faturamento_Mensal` | Visão Geral | `<FaturamentoMensalChart />` |
 | `AGG_Procedimentos` | Procedimentos | `<TipoProcedimentoChart />` + `<ProcedimentoTable />` |
 | `AGG_Municipios` | Geográfico | `<MunicipioChart />` |
 | `AGG_Operadoras` | Operadoras | `<OperadoraChart />` |
 | `AGG_Acomodacao` | Visão Geral | `<AcomodacaoChart />` |
 | `AGG_Sexo` | Visão Geral | `<SexoChart />` |
+| `AGG_PacoteHoras` | Visão Geral | (novo componente a criar) |
 
 ---
 
 ## Frequência de Atualização
 
-| Aba | Quem atualiza | Frequência |
+| Aba | Quem atualiza | Quando |
 |---|---|---|
-| `Pacientes` | Equipe clínica/administrativa | A cada admissão, alta ou mudança de status |
+| `Pacientes` | Equipe administrativa | A cada admissão ou alteração de dados cadastrais |
+| `Log_Status_Paciente` | Equipe clínica | A cada mudança de status clínico |
+| `Log_Pacote_Horas` | Equipe clínica | A cada mudança de pacote de cuidado |
 | `Procedimentos_Realizados` | Equipe de faturamento | Ao fechar o faturamento mensal |
-| `REF_*` | Administrador | Ao cadastrar nova operadora ou procedimento |
+| `REF_*` | Administrador | Ao adicionar nova operadora, procedimento etc. |
 | `AGG_*` | Automático (fórmulas) | Tempo real — recalculam ao salvar qualquer dado |
 
 ---
 
 ## Regras de Consistência de Dados
 
-1. **`paciente_id` em `Procedimentos_Realizados`** deve sempre existir em `Pacientes!id`. Sem FK nativa no Sheets — validar manualmente ou via script Apps Script.
-2. **Município** deve ser escrito de forma idêntica em todos os lançamentos do mesmo paciente (maiúsculas, acentuação). Recomendado padronizar uma lista informal de referência.
-3. **Valores monetários:** ponto (`.`) como separador decimal. Sem `R$` ou `.` para milhar.
-4. **Meses:** apenas as abreviações definidas (`Jan`, `Fev`…). Nunca numerais (`01`, `1`).
-5. **Não deletar linhas** nas abas `AGG_*`. Apenas adicionar ou deixar com valor zero.
-6. **Campos `_auto`** em `Procedimentos_Realizados` não devem ser editados manualmente — são sempre recalculados por fórmula.
-7. **`data_saida` vazia** = paciente ativo. Nunca preencher com data futura.
+1. **Logs são imutáveis.** `Log_Status_Paciente` e `Log_Pacote_Horas` nunca têm linhas deletadas ou editadas. Para corrigir, adicione nova linha com observação.
+2. **`paciente_id`** deve sempre corresponder a um `id` existente em `Pacientes`. Não há FK nativa no Sheets — valide manualmente ou com Apps Script.
+3. **Município** deve ter grafia idêntica em todos os cadastros do mesmo local.
+4. **Valores monetários:** ponto (`.`) decimal. Sem `R$`, sem ponto de milhar.
+5. **Meses:** apenas abreviações `Jan`…`Dez`. Nunca numerais.
+6. **`valor_total` em `PR`** é fórmula — nunca digitar diretamente.
+7. **`status_atual` e `pacote_horas_atual` em `Pacientes`** são fórmulas — nunca digitar.
+8. **Campos `_auto` em `PR`** são fórmulas — nunca digitar.
+9. **`data_saida` vazia** = paciente ativo. Não preencher com datas futuras.
+10. **Não deletar linhas** em abas `AGG_*`.
 
 ---
 
 ## Próximos Passos para Integração Técnica
 
 - [ ] Criar a planilha Google Sheets com todas as abas descritas
-- [ ] Configurar Validação de Dados (dropdowns) para campos controlados
+- [ ] Configurar Validação de Dados (dropdowns) conforme tabela acima
 - [ ] Configurar permissão de leitura via **Google Sheets API v4** (Service Account)
-- [ ] Criar variável de ambiente `VITE_GOOGLE_SHEETS_ID` com o ID da planilha
-- [ ] Implementar `src/lib/sheets.ts` — lê as abas `AGG_*` e `Pacientes` e mapeia para os tipos do frontend
-- [ ] Substituir importações de `src/data/mock.ts` por hooks de dados reais
-- [ ] Adicionar estados de loading e erro nos componentes de visualização
-- [ ] Configurar cache/revalidação (ex: a cada 30 min ou via botão manual)
-- [ ] Avaliar Apps Script para validação de FK (`paciente_id` ↔ `Pacientes`)
+- [ ] Criar variável de ambiente `VITE_GOOGLE_SHEETS_ID`
+- [ ] Implementar `src/lib/sheets.ts` — lê `AGG_*`, `Pacientes` e logs, mapeia para tipos do frontend
+- [ ] Substituir `src/data/mock.ts` por hooks de dados reais
+- [ ] Adicionar estados de loading e erro nos componentes
+- [ ] Configurar cache/revalidação (ex: a cada 30 min ou botão manual)
+- [ ] Avaliar Apps Script para validação de FK e automação de `id` sequencial
+- [ ] Criar componente `<PacoteHorasChart />` para visualizar `AGG_PacoteHoras`
