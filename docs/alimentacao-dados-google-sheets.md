@@ -20,7 +20,8 @@ CAMADA 2 — REFERÊNCIA (listas pré-definidas, fonte dos dropdowns)
 ├── REF_Sexo
 ├── REF_Municipios
 ├── REF_Acomodacao
-└── REF_Pacote_Horas
+├── REF_Pacote_Horas
+└── REF_Meses             ← ordem canônica dos meses (Jan…Dez)
 
 CAMADA 3 — AGREGAÇÃO (fórmulas automáticas, lidas pelo dashboard)
 ├── AGG_Municipios
@@ -133,7 +134,7 @@ id | paciente_id | procedimento | mes | ano | quantidade | valor_unitario | valo
 | A `id` | Inteiro | Manual | Identificador único do lançamento |
 | B `paciente_id` | Inteiro | Manual | FK → `Pacientes.id` |
 | C `procedimento` | Texto | Manual | Nome do procedimento — usar exatamente como está em `REF_Procedimentos` |
-| D `mes` | Texto | Manual | `Jan` … `Dez` |
+| D `mes` | Texto | **Dropdown** | `Jan` … `Dez` — usar `REF_Meses!A1:A12` |
 | E `ano` | Inteiro | Manual | Ex: `2025` |
 | F `quantidade` | Inteiro | Manual | Nº de execuções do procedimento no mês |
 | G `valor_unitario` | Decimal | Manual | Valor de uma execução (R$) |
@@ -202,6 +203,29 @@ AD
 24h
 ```
 
+### `REF_Meses`
+
+Lista com os 12 meses em ordem cronológica. Serve como fonte do dropdown de `mes` em `Procedimentos_Realizados` **e** como tabela de ordenação nas fórmulas de agregação mensal.
+
+```
+Jan
+Fev
+Mar
+Abr
+Mai
+Jun
+Jul
+Ago
+Set
+Out
+Nov
+Dez
+```
+
+> **Por que existe essa lista?** Meses armazenados como texto (`Jan`, `Fev`…) não ordenam cronologicamente por padrão — o Google Sheets ordenaria alfabeticamente (`Abr`, `Ago`, `Dez`…). A `REF_Meses` serve como índice: `MATCH("Mar", REF_Meses!A$1:A$12, 0)` retorna `3`, permitindo ordenar corretamente.
+
+---
+
 ### `REF_Municipios`
 
 Lista com os 92 municípios do estado do Rio de Janeiro. Primeiros valores:
@@ -233,8 +257,8 @@ Intervalos exatamente conforme o JSON exportado da planilha real:
 | `Pacientes.acomodacao` (col G) | `REF_Acomodacao!A1:A` | Sim |
 | `Pacientes.status` (col H) | `REF_Status!A1:A` | Sim |
 | `Pacientes.pacote_horas` (col I) | `REF_Pacote_Horas!A1:A` | Sim |
-| `Procedimentos_Realizados.procedimento` (col C) | **não configurado** — recomendado adicionar | — |
-| `Procedimentos_Realizados.mes` (col D) | **não configurado** — recomendado adicionar | — |
+| `Procedimentos_Realizados.procedimento` (col C) | **não configurado** — recomendado adicionar | `REF_Procedimentos!A1:A` |
+| `Procedimentos_Realizados.mes` (col D) | **não configurado** — recomendado adicionar | `REF_Meses!A1:A12` |
 
 ---
 
@@ -291,15 +315,50 @@ Sem join — `procedimento` é coluna direta de PR.
 
 ### `AGG_Faturamento_Mensal`
 
-Sem join — mes/ano são colunas diretas de PR.
+> **Problema:** meses e anos não podem ser hardcoded — novos lançamentos em meses ainda não cadastrados precisam aparecer automaticamente.
+> **Solução:** função `QUERY`, que agrupa e descobre combinações únicas de ano+mês direto dos dados.
 
-| Coluna | Fórmula (linha 2) |
-|---|---|
-| A `mes` | Fixo (ex: `Jan`) |
-| B `ano` | Fixo (ex: `2025`) |
-| C `valor_total` | `=SUMIFS(PR!H:H, PR!D:D, A2, PR!E:E, B2)` |
-| D `qtd_realizacoes` | `=SUMIFS(PR!F:F, PR!D:D, A2, PR!E:E, B2)` |
-| E `qtd_pacientes_ativos` | `=COUNTIFS(PR!D:D, A2, PR!E:E, B2, PR!B:B, ">"&0)` |
+**Fórmula única na célula A1 (gera cabeçalho + todas as linhas):**
+
+```
+=QUERY(
+  Procedimentos_Realizados!A:H,
+  "SELECT E, D, SUM(H), SUM(F)
+   WHERE E IS NOT NULL AND D IS NOT NULL
+   GROUP BY E, D
+   LABEL E 'ano', D 'mes', SUM(H) 'valor_total', SUM(F) 'qtd_realizacoes'",
+  1
+)
+```
+
+- Não escreva mais nada nessa aba — a fórmula preenche tudo sozinha.
+- Ao adicionar novos lançamentos em PR, novas linhas de ano+mês aparecem automaticamente.
+- O `LABEL` dentro da query define os cabeçalhos sem hardcoding externo.
+
+**Coluna auxiliar para ordenação cronológica (coluna E, fora do QUERY):**
+
+Como meses são texto (`Jan`, `Fev`…), o QUERY os ordena alfabeticamente. Para ordenar cronologicamente, adicione uma coluna auxiliar oculta:
+
+| Coluna | Fórmula (linha 2 em diante) | Descrição |
+|---|---|---|
+| E `mes_ordem` | `=IFERROR(MATCH(B2, REF_Meses!A$1:A$12, 0), 13)` | Retorna 1 para Jan, 2 para Fev… 12 para Dez |
+
+O dashboard usa essa coluna como chave de ordenação ao exibir o gráfico mensal. Células da coluna E podem ser ocultadas se necessário (`clique direito → ocultar coluna`).
+
+**Por que não usar `SUMIFS` com linhas fixas?**
+
+```
+❌ Abordagem com hardcoding:
+   A2 = "Jan"  (digitado)
+   B2 = 2025   (digitado)
+   C2 = =SUMIFS(PR!H:H, PR!D:D, A2, PR!E:E, B2)
+   → Precisa criar manualmente uma linha para cada mês do ano
+
+✅ Abordagem com QUERY:
+   A1 = =QUERY(...)
+   → Descobre todos os pares (ano, mês) existentes nos dados automaticamente
+   → Funciona para qualquer número de anos sem intervenção manual
+```
 
 ### `AGG_Acomodacao`
 
@@ -317,6 +376,83 @@ Sem join — mes/ano são colunas diretas de PR.
 | B `qtd_pacientes_ativos` | `=COUNTIF(PAC!I:I, A2)` |
 | C `percentual` | `=IFERROR(B2/SUM(B$2:B$5)*100, 0)` |
 | D `valor_total` | `=SUMPRODUCT((IFERROR(VLOOKUP(PR!$B$2:$B$9999,PAC!$A:$I,9,0),"")=A2)*PR!$H$2:$H$9999)` |
+
+---
+
+## Matching Dinâmico de Ano+Mês
+
+### O Problema
+
+`Procedimentos_Realizados` registra `mes` (texto) e `ano` (inteiro) separados. Para agregar por período, é preciso cruzar **dois critérios ao mesmo tempo**. Com hardcoding, cada mês/ano vira uma linha manual que precisa ser criada antecipadamente — impraticável quando o faturamento cobre vários meses ou anos.
+
+### Por que QUERY Resolve
+
+A função `QUERY` executa uma instrução SQL-like sobre um intervalo e retorna um resultado dinâmico:
+
+```
+=QUERY(intervalo, "instrução SQL", linhas_de_cabeçalho)
+```
+
+Ela descobre sozinha quais combinações (ano, mês) existem e agrupa os valores:
+
+```
+SELECT E, D, SUM(H), SUM(F)
+GROUP BY E, D
+```
+
+Tradução: *"para cada par único de ano (coluna E) + mês (coluna D), some os valores (H) e as quantidades (F)".*
+
+### Filtrar por Mês Específico Dentro de Outras AGGs
+
+Quando uma AGG precisa cruzar dimensões de `Pacientes` (operadora, sexo, município) **filtradas por um período**, adicione critérios de mês/ano ao `SUMPRODUCT`:
+
+```
+Valor total da CAMPERJ em Jan/2025:
+=SUMPRODUCT(
+  (IFERROR(VLOOKUP(PR!$B$2:$B$9999, PAC!$A:$F, 6, 0), "") = "CAMPERJ") *
+  (PR!$D$2:$D$9999 = "Jan") *
+  (PR!$E$2:$E$9999 = 2025) *
+  PR!$H$2:$H$9999
+)
+```
+
+Para tornar o período dinâmico (sem hardcoding "Jan" / 2025), use células de referência:
+
+```
+Célula de controle:   H1 = Jan   (dropdown de REF_Meses)
+                      H2 = 2025  (digitado ou extraído de PR)
+
+Fórmula dinâmica:
+=SUMPRODUCT(
+  (IFERROR(VLOOKUP(PR!$B$2:$B$9999, PAC!$A:$F, 6, 0), "") = A2) *
+  (PR!$D$2:$D$9999 = $H$1) *
+  (PR!$E$2:$E$9999 = $H$2) *
+  PR!$H$2:$H$9999
+)
+```
+
+Alterar `H1` ou `H2` recalcula toda a aba instantaneamente.
+
+### Ordenação Cronológica Correta
+
+Meses armazenados como texto não ordenam em sequência de calendário. `REF_Meses` resolve isso como índice:
+
+| Fórmula | Resultado |
+|---|---|
+| `=MATCH("Jan", REF_Meses!A$1:A$12, 0)` | `1` |
+| `=MATCH("Mar", REF_Meses!A$1:A$12, 0)` | `3` |
+| `=MATCH("Dez", REF_Meses!A$1:A$12, 0)` | `12` |
+
+Use como coluna auxiliar em `AGG_Faturamento_Mensal` (coluna E `mes_ordem`) para que o dashboard ordene o gráfico cronologicamente. Alternativamente, o frontend pode mapear o nome do mês ao índice diretamente em JavaScript.
+
+### Resumo das Funções por Cenário
+
+| Cenário | Função | Motivo |
+|---|---|---|
+| Gerar lista dinâmica de períodos | `QUERY … GROUP BY` | Descobre pares únicos sem hardcoding |
+| Somar valor de um período conhecido | `SUMIFS(…, D:D, "Jan", E:E, 2025)` | Dois critérios na mesma tabela |
+| Cruzar período com dimensão de Pacientes | `SUMPRODUCT(… * (D="Jan") * (E=2025) * …)` | Join inline com múltiplos critérios |
+| Ordenar meses cronologicamente | `MATCH(mes, REF_Meses!A:A, 0)` | Converte texto em número de ordem |
 
 ---
 
@@ -394,7 +530,7 @@ Pacientes com status "Internação" no pacote "24h":
 1. **`paciente_id`** em `Procedimentos_Realizados` deve existir em `Pacientes.id`.
 2. **Município** deve ser selecionado do dropdown — sempre `REF_Municipios!A:A`.
 3. **Valores monetários:** ponto (`.`) decimal. Sem `R$`, sem ponto de milhar.
-4. **Meses:** apenas abreviações `Jan`…`Dez`. Nunca numerais.
+4. **Meses:** apenas abreviações `Jan`…`Dez` via dropdown de `REF_Meses`. Nunca numerais, nunca por extenso.
 5. **Coluna `valor_total`** (H em PR) — nunca digitar, é fórmula.
 6. **`data_saida` vazia** = paciente ativo. Não preencher com datas futuras.
 7. **Não deletar linhas** em abas `AGG_*`.
@@ -409,7 +545,7 @@ Itens identificados no JSON exportado que ainda precisam ser configurados:
 | Item | Status | Ação necessária |
 |---|---|---|
 | Dropdown em `Procedimentos_Realizados.procedimento` | ❌ Não configurado | Adicionar validação: `REF_Procedimentos!A1:A` |
-| Dropdown em `Procedimentos_Realizados.mes` | ❌ Não configurado | Adicionar validação: lista `Jan,Fev,Mar,Abr,Mai,Jun,Jul,Ago,Set,Out,Nov,Dez` |
+| Dropdown em `Procedimentos_Realizados.mes` | ❌ Não configurado | Adicionar validação: `REF_Meses!A1:A12` |
 | Espaços à direita em `REF_Procedimentos` | ⚠️ Presente | Limpar ou usar `TRIM()` nas fórmulas |
 | Fórmulas nas abas `AGG_*` | ❌ Não configurado | Inserir conforme esta documentação |
 | Fórmula `valor_total` em `Procedimentos_Realizados!H` | ❌ Não configurado | `=IF(F2="","",F2*G2)` copiada até linha 1000 |
