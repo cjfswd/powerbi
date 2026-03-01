@@ -10,11 +10,7 @@ import {
   DollarSign, Users, TrendingUp, AlertTriangle, Building2, MapPin,
   Activity, FileText, Home, ChevronDown, ChevronUp
 } from "lucide-react"
-import {
-  kpis, distribuicaoAssistencia, tipoProcedimento, distribuicaoMunicipio,
-  perfilSexo, valorOperadora, tipoAcomodacao, faturamentoMensal,
-  tipoGuia, areaPrestador, tipoDespesa, pacientes, statusPacienteConfig
-} from "@/data/mock"
+import { useDashboard } from "@/lib/DashboardDataContext"
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
@@ -71,6 +67,7 @@ function KpiCard({ title, value, icon: Icon, description, variant = "default" }:
 }
 
 function KpiSection() {
+  const { kpis } = useDashboard()
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       <KpiCard
@@ -117,6 +114,7 @@ function KpiSection() {
 }
 
 function FaturamentoMensalChart() {
+  const { faturamentoMensal } = useDashboard()
   return (
     <Card className="col-span-full lg:col-span-2">
       <CardHeader>
@@ -144,6 +142,7 @@ function FaturamentoMensalChart() {
 }
 
 function DistribuicaoAssistenciaChart() {
+  const { distribuicaoAssistencia } = useDashboard()
   return (
     <Card>
       <CardHeader>
@@ -177,6 +176,7 @@ function DistribuicaoAssistenciaChart() {
 }
 
 function TipoProcedimentoChart() {
+  const { tipoProcedimento } = useDashboard()
   return (
     <Card className="col-span-full lg:col-span-2">
       <CardHeader>
@@ -202,6 +202,7 @@ function TipoProcedimentoChart() {
 }
 
 function MunicipioChart() {
+  const { distribuicaoMunicipio } = useDashboard()
   return (
     <Card>
       <CardHeader>
@@ -227,6 +228,7 @@ function MunicipioChart() {
 }
 
 function SexoChart() {
+  const { perfilSexo } = useDashboard()
   return (
     <Card>
       <CardHeader>
@@ -259,6 +261,7 @@ function SexoChart() {
 }
 
 function OperadoraChart() {
+  const { valorOperadora } = useDashboard()
   const total = valorOperadora.reduce((s, p) => s + p.valor, 0)
   return (
     <Card>
@@ -292,6 +295,7 @@ function OperadoraChart() {
 }
 
 function AcomodacaoChart() {
+  const { tipoAcomodacao } = useDashboard()
   return (
     <Card>
       <CardHeader>
@@ -324,6 +328,7 @@ function AcomodacaoChart() {
 }
 
 function InfoCards() {
+  const { tipoGuia, areaPrestador, tipoDespesa } = useDashboard()
   const items = [
     { icon: FileText, label: "Tipo de Guia", value: tipoGuia.tipo, detail: formatCurrency(tipoGuia.valor) },
     { icon: MapPin, label: "Área do Prestador", value: areaPrestador.area, detail: formatCurrency(areaPrestador.valor) },
@@ -352,6 +357,7 @@ function InfoCards() {
 }
 
 function ProcedimentoTable() {
+  const { tipoProcedimento, kpis } = useDashboard()
   return (
     <Card>
       <CardHeader>
@@ -395,6 +401,7 @@ function ProcedimentoTable() {
 }
 
 function AtendimentoHorasChart() {
+  const { pacientes } = useDashboard()
   // Aggregate attendance hours from all patients with ID accommodation
   const patientsComHoras = pacientes.filter(p => (p as any).horasAtendimento)
 
@@ -502,6 +509,7 @@ function AtendimentoHorasChart() {
 }
 
 function AnaliticoPacientes() {
+  const { pacientes, statusPacienteConfig } = useDashboard()
   const [municipioFilter, setMunicipioFilter] = React.useState<string>("todos")
   const [statusFilter, setStatusFilter] = React.useState<string>("todos")
   const [operadoraFilter, setOperadoraFilter] = React.useState<string>("todas")
@@ -720,6 +728,7 @@ function AnaliticoPacientes() {
 }
 
 function App() {
+  const { distribuicaoMunicipio, valorOperadora, kpis } = useDashboard()
   return (
     <div className="min-h-screen bg-muted/30">
       {/* Header */}
