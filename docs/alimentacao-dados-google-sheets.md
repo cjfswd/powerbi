@@ -552,16 +552,94 @@ Itens identificados no JSON exportado que ainda precisam ser configurados:
 
 ---
 
+## Configuração da API Key do Google Sheets
+
+O dashboard consome a planilha via **Google Sheets API v4** usando uma API Key de leitura. Siga os passos abaixo para obtê-la.
+
+### Passo 1 — Criar um projeto no Google Cloud Console
+
+1. Acesse [console.cloud.google.com](https://console.cloud.google.com)
+2. No seletor de projetos (topo da página), clique em **"Novo projeto"**
+3. Dê um nome (ex: `faturamento-dashboard`) e clique em **"Criar"**
+4. Aguarde a criação e certifique-se de que o projeto novo está selecionado
+
+### Passo 2 — Ativar a Google Sheets API
+
+1. No menu lateral, vá em **APIs e serviços → Biblioteca**
+2. Pesquise por `Google Sheets API`
+3. Clique no resultado e depois em **"Ativar"**
+
+### Passo 3 — Criar a API Key
+
+1. No menu lateral, vá em **APIs e serviços → Credenciais**
+2. Clique em **"+ Criar credenciais" → "Chave de API"**
+3. Uma chave será gerada (formato `AIzaSy...`) — copie-a
+4. Clique em **"Editar chave"** para restringi-la (recomendado):
+   - **Restrições de aplicativo:** selecione "Referenciadores HTTP" e adicione o domínio de produção (ex: `https://seudominio.com/*`) e `http://localhost:5173/*` para desenvolvimento
+   - **Restrições de API:** selecione "Restringir chave" → marque `Google Sheets API`
+5. Clique em **"Salvar"**
+
+> **Segurança:** a API Key de leitura exposta no frontend é aceitável quando a planilha é semi-pública (acesso por link). A restrição por domínio impede uso da chave por outros sites.
+
+### Passo 4 — Liberar acesso à planilha
+
+A planilha precisa estar acessível para qualquer pessoa com o link (não precisa ser indexada publicamente):
+
+1. Abra a planilha **FATURAMENTO** no Google Sheets
+2. Clique em **"Compartilhar"** (botão azul, canto superior direito)
+3. Em "Acesso geral", altere de "Restrito" para **"Qualquer pessoa com o link"**
+4. Certifique-se de que o nível é **"Leitor"** (somente leitura)
+5. Clique em **"Concluído"**
+
+> A planilha não aparece em buscas públicas — apenas quem tiver a URL consegue acessar.
+
+### Passo 5 — Configurar o projeto
+
+1. Copie o arquivo de exemplo de variáveis de ambiente:
+   ```bash
+   cp .env.example .env.local
+   ```
+2. Abra `.env.local` e preencha:
+   ```
+   VITE_GOOGLE_SHEETS_ID=1tQHfqn8VSS78iQ7csxwJ6xobT769Umc5-ZDkqLXTjps
+   VITE_GOOGLE_SHEETS_API_KEY=AIzaSy...sua_chave_aqui
+   ```
+3. Inicie o servidor de desenvolvimento:
+   ```bash
+   npm run dev
+   ```
+
+O dashboard detecta automaticamente as variáveis: se presentes, busca dados reais da planilha; se ausentes, exibe os dados de exemplo embutidos.
+
+### Verificar se está funcionando
+
+Teste a chave diretamente no navegador (substitua os valores):
+
+```
+https://sheets.googleapis.com/v4/spreadsheets/1tQHfqn8VSS78iQ7csxwJ6xobT769Umc5-ZDkqLXTjps/values/Pacientes!A1:B3?key=SUA_CHAVE_AQUI
+```
+
+Resposta esperada (JSON com os primeiros dados de `Pacientes`):
+```json
+{
+  "range": "Pacientes!A1:B3",
+  "majorDimension": "ROWS",
+  "values": [["id", "nome"], ["1", "João Silva"], ...]
+}
+```
+
+Se retornar `403`, verifique: planilha está pública? API Key tem a Sheets API habilitada?
+
+---
+
 ## Próximos Passos para Integração Técnica
 
 - [ ] Configurar dropdowns pendentes em `Procedimentos_Realizados` (procedimento e mes)
 - [ ] Limpar espaços à direita nos valores de `REF_Procedimentos`
 - [ ] Inserir fórmulas nas abas `AGG_*` conforme esta documentação
 - [ ] Inserir fórmula `valor_total` em `Procedimentos_Realizados!H2:H1000`
-- [ ] Configurar permissão de leitura via **Google Sheets API v4** (Service Account)
-- [ ] Criar variável de ambiente `VITE_GOOGLE_SHEETS_ID=1tQHfqn8VSS78iQ7csxwJ6xobT769Umc5-ZDkqLXTjps`
-- [ ] Implementar `src/lib/sheets.ts` — lê `AGG_*` e `Pacientes`, mapeia para tipos do frontend
-- [ ] Substituir `src/data/mock.ts` por hooks de dados reais
-- [ ] Adicionar estados de loading e erro nos componentes
+- [x] Implementar `src/lib/sheets.ts` — cliente REST batchGet, parsers por aba
+- [x] Substituir `src/data/mock.ts` por Context com dados reais (`src/lib/DashboardDataContext.tsx`)
+- [x] Adicionar estados de loading e erro no Provider
 - [ ] Configurar cache/revalidação (ex: a cada 30 min ou botão manual)
 - [ ] Criar componente `<PacoteHorasChart />` para `AGG_Pacote_Horas`
