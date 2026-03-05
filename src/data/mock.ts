@@ -92,3 +92,12 @@ export const statusPacienteConfig = {
   "Ouvidoria": { label: "Ouvidoria", cor: "#f59e0b", icon: "📋" },
 }
 
+export const refProcedimentos: { procedimento: string; dataCriacao: string; valor: number; ativo: boolean }[] = [
+  ...tipoProcedimento.map(p => ({
+    procedimento: p.procedimento,
+    dataCriacao: new Date().toISOString(),
+    valor: Math.round(p.valor / 100),
+    ativo: true // mock default
+  }))
+]
+

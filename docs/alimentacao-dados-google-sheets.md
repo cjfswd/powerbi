@@ -601,15 +601,15 @@ A planilha precisa estar acessível para qualquer pessoa com o link (não precis
    ```
 2. Abra `.env.local` e preencha:
    ```
-   VITE_GOOGLE_SHEETS_ID=1tQHfqn8VSS78iQ7csxwJ6xobT769Umc5-ZDkqLXTjps
-   VITE_GOOGLE_SHEETS_API_KEY=AIzaSy...sua_chave_aqui
+   GOOGLE_SHEETS_ID=1tQHfqn8VSS78iQ7csxwJ6xobT769Umc5-ZDkqLXTjps
+   GOOGLE_SHEETS_API_KEY=AIzaSy...sua_chave_aqui
    ```
 3. Inicie o servidor de desenvolvimento:
    ```bash
-   npm run dev
+   pnpm dev
    ```
 
-O dashboard detecta automaticamente as variáveis: se presentes, busca dados reais da planilha; se ausentes, exibe os dados de exemplo embutidos.
+O painel detecta automaticamente os dados por meio de uma função local do Vercel (`/api/sheets`). Se as variáveis estiverem configuradas, ele busca dados reais da planilha; se houver algum erro ou as variáveis estiverem ausentes, ele exibe os dados de exemplo embutidos.
 
 ### Verificar se está funcionando
 
@@ -632,14 +632,32 @@ Se retornar `403`, verifique: planilha está pública? API Key tem a Sheets API 
 
 ---
 
+## Integração Serverless com Vercel (Backend)
+
+Para garantir segurança, resiliência contra limites de uso da quota da API, e melhoria de performance no carregamento, o projeto foi refatorado utilizando **Serverless Functions** na Vercel (pasta `api/`), limitando o acesso da conexão com a API ao lado do servidor.
+
+### Módulos do Backend
+
+- **`api/sheets.ts` (Leitura Otimizada):** Realiza uma requisição unificada `batchGet` (API v4) para coletar as abas listagens raw e as planilhas agregadoras `AGG_*`. Executa cache na borda pelo Vercel Edge (`Cache-Control: s-maxage=30, stale-while-revalidate=60`).
+- **`api/patients.ts` (Gravação de Pacientes):** Requer autenticação por *Google Service Account*. Adiciona os cadastros novos na lista principal da aba `Pacientes`.
+- **`api/procedimentos.ts` (Gestão de Faturamentos e Referências):** Concentrador de requisições de gravação financeira em lote (`Procedimentos_Realizados`) e de novos catálogos de valores por procedimento dinamicamente (`Ref_Procedimentos`).
+
+### Requisitos Adicionais no Ambiente (`.env.local`)
+Além de `GOOGLE_SHEETS_ID` e `GOOGLE_SHEETS_API_KEY` (usadas para a liberação da leitura pública rápida `batchGet` sem autenticação pesada):
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL`
+- `GOOGLE_PRIVATE_KEY`
+
+Estas chaves asseguram que as gravações funcionem restritamente do lado de servidor e **não devem circular na interface do usuário (Frontend)**.
+
+---
+
 ## Próximos Passos para Integração Técnica
 
 - [ ] Configurar dropdowns pendentes em `Procedimentos_Realizados` (procedimento e mes)
 - [ ] Limpar espaços à direita nos valores de `REF_Procedimentos`
 - [ ] Inserir fórmulas nas abas `AGG_*` conforme esta documentação
 - [ ] Inserir fórmula `valor_total` em `Procedimentos_Realizados!H2:H1000`
-- [x] Implementar `src/lib/sheets.ts` — cliente REST batchGet, parsers por aba
-- [x] Substituir `src/data/mock.ts` por Context com dados reais (`src/lib/DashboardDataContext.tsx`)
-- [x] Adicionar estados de loading e erro no Provider
-- [ ] Configurar cache/revalidação (ex: a cada 30 min ou botão manual)
+- [x] Migração de clientes REST diretos para backend Serverless (`api/sheets.ts`) otimizado com cache 
+- [x] Inserção Serverless segura `api/patients.ts` e `api/procedimentos.ts` via Service Account
+- [x] Configurar cache/revalidação (configurado SWR Edge Cache em `api/sheets.ts`)
 - [ ] Criar componente `<PacoteHorasChart />` para `AGG_Pacote_Horas`
