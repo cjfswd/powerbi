@@ -11,6 +11,8 @@ import {
   Activity, FileText, Home, ChevronDown, ChevronUp
 } from "lucide-react"
 import { useDashboard } from "@/lib/DashboardDataContext"
+import { ComboboxFilter } from "@/components/ui/combobox-filter"
+import { DataEntry } from "@/components/DataEntry"
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
@@ -401,9 +403,12 @@ function ProcedimentoTable() {
 }
 
 function AtendimentoHorasChart() {
-  const { pacientes } = useDashboard()
+  const { pacientes, globalOperadora } = useDashboard()
   // Aggregate attendance hours from all patients with ID accommodation
-  const patientsComHoras = pacientes.filter(p => (p as any).horasAtendimento)
+  let patientsComHoras = pacientes.filter(p => (p as any).horasAtendimento)
+  if (globalOperadora !== 'todas') {
+    patientsComHoras = patientsComHoras.filter(p => p.operadora === globalOperadora)
+  }
 
   const horasData = {
     "3h": 0,
@@ -509,15 +514,35 @@ function AtendimentoHorasChart() {
 }
 
 function AnaliticoPacientes() {
-  const { pacientes, statusPacienteConfig } = useDashboard()
+  const { pacientes, statusPacienteConfig, distribuicaoMunicipio, valorOperadora, globalOperadora } = useDashboard()
   const [municipioFilter, setMunicipioFilter] = React.useState<string>("todos")
   const [statusFilter, setStatusFilter] = React.useState<string>("todos")
   const [operadoraFilter, setOperadoraFilter] = React.useState<string>("todas")
   const [expandedPatientId, setExpandedPatientId] = React.useState<number | null>(null)
 
-  const municipios = ["todos", ...new Set(pacientes.map(p => p.municipio))]
+  // Sync the local filter with the global filter when the global filter changes
+  React.useEffect(() => {
+    setOperadoraFilter(globalOperadora)
+  }, [globalOperadora])
+
+  const municipioOptions = [
+    { label: "Todos os Municípios", value: "todos" },
+    ...distribuicaoMunicipio.map(m => ({ label: m.municipio, value: m.municipio }))
+  ]
+
   const statusList = ["todos", ...Object.keys(statusPacienteConfig)]
-  const operadoras = ["todas", ...new Set(pacientes.map(p => p.operadora))]
+  const statusOptions = [
+    { label: "Todos os Status", value: "todos" },
+    ...Object.keys(statusPacienteConfig).map(s => ({
+      label: statusPacienteConfig[s as keyof typeof statusPacienteConfig]?.label || s,
+      value: s
+    }))
+  ]
+
+  const operadoraOptions = [
+    { label: "Todas as Operadoras", value: "todas" },
+    ...valorOperadora.map(o => ({ label: o.operadora, value: o.operadora }))
+  ]
 
   const pacientesFiltrados = pacientes.filter(p => {
     const municipioOk = municipioFilter === "todos" || p.municipio === municipioFilter
@@ -540,51 +565,39 @@ function AnaliticoPacientes() {
         <Card>
           <CardContent className="pt-6">
             <label className="text-sm font-medium mb-2 block">Filtrar por Município</label>
-            <select
+            <ComboboxFilter
+              options={municipioOptions}
               value={municipioFilter}
-              onChange={(e) => setMunicipioFilter(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md bg-background text-foreground cursor-pointer"
-            >
-              {municipios.map(m => (
-                <option key={m} value={m}>
-                  {m === "todos" ? "Todos os Municípios" : m}
-                </option>
-              ))}
-            </select>
+              onValueChange={setMunicipioFilter}
+              placeholder="Selecione um município..."
+              emptyMessage="Município não encontrado."
+            />
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="pt-6">
             <label className="text-sm font-medium mb-2 block">Filtrar por Status</label>
-            <select
+            <ComboboxFilter
+              options={statusOptions}
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md bg-background text-foreground cursor-pointer"
-            >
-              {statusList.map(s => (
-                <option key={s} value={s}>
-                  {s === "todos" ? "Todos os Status" : statusPacienteConfig[s as keyof typeof statusPacienteConfig]?.label || s}
-                </option>
-              ))}
-            </select>
+              onValueChange={setStatusFilter}
+              placeholder="Selecione um status..."
+              emptyMessage="Status não encontrado."
+            />
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="pt-6">
             <label className="text-sm font-medium mb-2 block">Filtrar por Operadora</label>
-            <select
+            <ComboboxFilter
+              options={operadoraOptions}
               value={operadoraFilter}
-              onChange={(e) => setOperadoraFilter(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md bg-background text-foreground cursor-pointer"
-            >
-              {operadoras.map(o => (
-                <option key={o} value={o}>
-                  {o === "todas" ? "Todas as Operadoras" : o}
-                </option>
-              ))}
-            </select>
+              onValueChange={setOperadoraFilter}
+              placeholder="Selecione uma operadora..."
+              emptyMessage="Operadora não encontrada."
+            />
           </CardContent>
         </Card>
       </div>
@@ -728,7 +741,7 @@ function AnaliticoPacientes() {
 }
 
 function App() {
-  const { distribuicaoMunicipio, valorOperadora, kpis } = useDashboard()
+  const { distribuicaoMunicipio, valorOperadora, kpis, globalOperadora, setGlobalOperadora } = useDashboard()
   return (
     <div className="min-h-screen bg-muted/30">
       {/* Header */}
@@ -739,10 +752,15 @@ function App() {
               <Building2 className="h-5 w-5 text-white" />
             </div>
             <div>
-              <select name="" id="">
-                <option value="">Todas Operadoras</option>
-                <option value="">Unimed</option>
-                <option value="">Camperj</option>
+              <select
+                className="bg-transparent border-none text-sm font-bold outline-none cursor-pointer text-foreground"
+                value={globalOperadora}
+                onChange={(e) => setGlobalOperadora(e.target.value)}
+              >
+                <option value="todas">Todas Operadoras</option>
+                {valorOperadora.map(o => (
+                  <option key={o.operadora} value={o.operadora}>{o.operadora}</option>
+                ))}
               </select>
               <h1 className="text-lg font-bold leading-none"></h1>
               <p className="text-xs text-muted-foreground">Faturamento 2025 - Atendimento Domiciliar</p>
@@ -765,6 +783,7 @@ function App() {
             <TabsTrigger value="operadoras">Operadoras</TabsTrigger>
             <TabsTrigger value="horas">Atendimento Horas</TabsTrigger>
             <TabsTrigger value="analitico">Analítico</TabsTrigger>
+            <TabsTrigger value="inserir">Inserir Dados</TabsTrigger>
           </TabsList>
 
           {/* Visao Geral */}
@@ -876,6 +895,11 @@ function App() {
             <div className="grid gap-4">
               <AnaliticoPacientes />
             </div>
+          </TabsContent>
+
+          {/* Inserir Dados */}
+          <TabsContent value="inserir" className="space-y-6">
+            <DataEntry />
           </TabsContent>
         </Tabs>
       </main>
