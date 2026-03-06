@@ -92,8 +92,8 @@ export default async function handler(req: any, res: any) {
       'AGG_Acomodacao!A:C',           // [5] codigo, qtd_pacientes, valor_total
       'AGG_Pacote_Horas!A:D',         // [6] pacote, qtd_ativos, percentual, valor_total
       'Pacientes!A:K',                // [7] id, nome, municipio, nasc, sexo, oper, acom, status, pacote, entrada, saida
-      'Procedimentos_Realizados!A:I', // [8] id, paciente_id, proc, mes, ano, qtd, unit, valor_total, valor_glosado
-      'REF_Procedimentos!A:F',         // [9] procedimento, valor, status, data_insercao, data_atualizacao, valores_anteriores
+      'Procedimentos_Realizados!A:K', // [8] id, paciente_id, proc, mes, ano, qtd, custo_unit, venda_unit, custo_total, venda_total, valor_glosado
+      'REF_Procedimentos!A:G',         // [9] procedimento, preco_custo, preco_venda, status, data_insercao, data_atualizacao, valores_anteriores
       'AGG_Faixa_Etaria!A:F',         // [10] faixa_etaria, qtd, %, desc, faturado, glosado
     ]
 
@@ -197,22 +197,24 @@ export default async function handler(req: any, res: any) {
 
     const validPatientIds = new Set(pacientesBase.map(r => num(r[0])))
 
-    // Original PR: [0] id, [1] paciente_id, [2] proc, [3] mes, [4] ano, [5] qtd, [6] unit, [7] valor_total, [8] valor_glosado
+    // Original PR: [0] id, [1] paciente_id, [2] proc, [3] mes, [4] ano, [5] qtd, [6] custo_unit, [7] venda_unit, [8] custo_total, [9] venda_total, [10] valor_glosado
     let prBase = dataRows(rawPR).filter(r => r[0])
     if (filterOperadora) {
       prBase = prBase.filter(r => validPatientIds.has(num(r[1])))
     }
 
     // --- Procedimentos_Realizados → custo por paciente -----------------------
-    // Sum valor_total (col H, index 7) and valor_glosado (col I, index 8) grouped by paciente_id (col B, index 1)
     const custoPorPaciente: Record<number, number> = {}
+    const vendaPorPaciente: Record<number, number> = {}
     const glosaPorPaciente: Record<number, number> = {}
     prBase.forEach(r => {
       const pid = num(r[1])
-      const valor = num(r[7])
-      const glosa = num(r[8])
+      const custoTotalVal = num(r[8])
+      const vendaTotalVal = num(r[9])
+      const glosa = num(r[10])
       if (pid > 0) {
-        custoPorPaciente[pid] = (custoPorPaciente[pid] ?? 0) + valor
+        custoPorPaciente[pid] = (custoPorPaciente[pid] ?? 0) + custoTotalVal
+        vendaPorPaciente[pid] = (vendaPorPaciente[pid] ?? 0) + vendaTotalVal
         glosaPorPaciente[pid] = (glosaPorPaciente[pid] ?? 0) + glosa
       }
     })
@@ -224,27 +226,30 @@ export default async function handler(req: any, res: any) {
         nome: str(r[1]),
         municipio: str(r[2]),
         status: str(r[7]),
-        custo: custoPorPaciente[num(r[0])] ?? 0,
+        custo: vendaPorPaciente[num(r[0])] ?? 0, // mantido 'custo' para fallback anterior, mas agora representa a 'venda' real para os gráficos baseados nisso
+        custoReal: custoPorPaciente[num(r[0])] ?? 0,
         operadora: str(r[5]),
         acomodacao: str(r[6]),
       }))
 
-    // --- REF_Procedimentos → reference pricing list (6-col standardized schema) ----
-    // Schema: procedimento | valor | status | data_insercao | data_atualizacao | valores_anteriores
+    // --- REF_Procedimentos → reference pricing list --------------------
+    // Schema: procedimento | preco_custo | preco_venda | status | data_insercao | data_atualizacao | valores_anteriores
     const refProcedimentos = dataRows(rawRefProcedimentos)
       .filter(r => r[0])
       .map(r => ({
         procedimento: str(r[0]),
-        valor: num(r[1]),
-        ativo: str(r[2]).toLowerCase() !== 'inativo',
-        status: str(r[2]) || 'Ativo',
-        dataInsercao: str(r[3]),
-        dataAtualizacao: str(r[4]),
-        valoresAnteriores: str(r[5]),
+        precoCusto: num(r[1]),
+        precoVenda: num(r[2]),
+        ativo: str(r[3]).toLowerCase() !== 'inativo',
+        status: str(r[3]) || 'Ativo',
+        dataInsercao: str(r[4]),
+        dataAtualizacao: str(r[5]),
+        valoresAnteriores: str(r[6]),
       }))
 
     // --- KPIs (derived from AGG data or dynamic if filtered) ------------------
     let valorTotalPago = 0
+    let custoTotal = 0
     let mediaMensalPaga = 0
     let pacientesDistintos = pacientes.length
     let custoMedioPaciente = 0
@@ -254,14 +259,17 @@ export default async function handler(req: any, res: any) {
       // 1. Faturamento Mensal
       const mesMap = new Map<string, number>()
       let totalVal = 0
+      let totalCusto = 0
       prBase.forEach(r => {
         const mes = str(r[3])
         const ano = num(r[4])
-        const val = num(r[7])
+        const custoTotalVal = num(r[8])
+        const vendaTotalVal = num(r[9])
         if (!mes || !ano) return
         const key = multiYear ? `${mes}/${String(ano).slice(2)}` : mes
-        mesMap.set(key, (mesMap.get(key) || 0) + val)
-        totalVal += val
+        mesMap.set(key, (mesMap.get(key) || 0) + vendaTotalVal)
+        totalVal += vendaTotalVal
+        totalCusto += custoTotalVal
       })
 
       faturamentoMensal = Array.from(mesMap.entries()).map(([mes, valor]) => ({ mes, valor }))
@@ -292,7 +300,7 @@ export default async function handler(req: any, res: any) {
       const procMap = new Map<string, number>()
       prBase.forEach(r => {
         const proc = str(r[2])
-        procMap.set(proc, (procMap.get(proc) || 0) + num(r[7]))
+        procMap.set(proc, (procMap.get(proc) || 0) + num(r[9]))
       })
       tipoProcedimento = Array.from(procMap.entries())
         .map(([procedimento, valor]) => ({ procedimento, valor }))
@@ -317,7 +325,7 @@ export default async function handler(req: any, res: any) {
       pacientesBase.forEach(r => {
         const id = num(r[0])
         const ac = str(r[6])
-        acomMap.set(ac, (acomMap.get(ac) || 0) + (custoPorPaciente[id] || 0))
+        acomMap.set(ac, (acomMap.get(ac) || 0) + (vendaPorPaciente[id] || 0))
       })
       tipoAcomodacao = Array.from(acomMap.entries()).map(([tipo, valor]) => {
         const meta = ACOMODACAO_META[tipo] ?? { label: tipo, cor: '#6366f1' }
@@ -329,7 +337,7 @@ export default async function handler(req: any, res: any) {
       pacientesBase.forEach(r => {
         const id = num(r[0])
         const pac = str(r[8])
-        pacoteMap.set(pac, (pacoteMap.get(pac) || 0) + (custoPorPaciente[id] || 0))
+        pacoteMap.set(pac, (pacoteMap.get(pac) || 0) + (vendaPorPaciente[id] || 0))
       })
       distribuicaoAssistencia = Array.from(pacoteMap.entries()).map(([tipo, valor]) => ({
         tipo, valor, cor: PACOTE_CORES[tipo] ?? '#6366f1'
@@ -361,7 +369,7 @@ export default async function handler(req: any, res: any) {
         const f = getFaixa(nasc)
         const curr = faixaMap.get(f) || { qtd: 0, valorFaturado: 0 }
         curr.qtd++
-        curr.valorFaturado += (custoPorPaciente[id] || 0)
+        curr.valorFaturado += (vendaPorPaciente[id] || 0)
         faixaMap.set(f, curr)
       })
 
@@ -380,7 +388,13 @@ export default async function handler(req: any, res: any) {
       }))
 
       valorTotalPago = totalVal
+      custoTotal = totalCusto
     } else {
+      let calcTotalCusto = 0
+      prBase.forEach(r => {
+        calcTotalCusto += num(r[8])
+      })
+      custoTotal = calcTotalCusto
       valorTotalPago = valorOperadora.reduce((s, p) => s + p.valor, 0)
     }
 
@@ -388,13 +402,15 @@ export default async function handler(req: any, res: any) {
       ? valorTotalPago / faturamentoMensal.length
       : 0
     custoMedioPaciente = pacientesDistintos > 0
-      ? valorTotalPago / pacientesDistintos
+      ? custoTotal / pacientesDistintos
       : 0
 
 
     const data = {
       kpis: {
         valorTotalPago,
+        custoTotal,
+        resultadoBruto: valorTotalPago - custoTotal,
         mediaMensalPaga,
         valorTotalGlosado: 0,
         mediaMensalGlosado: 0,

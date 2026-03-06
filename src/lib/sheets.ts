@@ -7,6 +7,8 @@
 export interface DashboardData {
   kpis: {
     valorTotalPago: number
+    custoTotal: number
+    resultadoBruto: number
     mediaMensalPaga: number
     valorTotalGlosado: number
     mediaMensalGlosado: number
@@ -30,11 +32,12 @@ export interface DashboardData {
     municipio: string
     status: string
     custo: number
+    custoReal: number
     operadora: string
     acomodacao: string
     horasAtendimento?: { '3h': number; '6h': number; '12h': number; '24h': number }
   }[]
-  refProcedimentos?: { procedimento: string; dataCriacao: string; valor: number; ativo: boolean }[]
+  refProcedimentos?: { procedimento: string; dataCriacao: string; precoCusto: number; precoVenda: number; ativo: boolean }[]
   faixaEtaria: {
     faixa: string
     descricao: string

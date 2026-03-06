@@ -71,8 +71,11 @@ REF_Pacote_Horas ─────────────────────
                          │  mes                                           │
                          │  ano                                           │
                          │  quantidade                                    │
-                         │  valor_unitario                                │
-                         │  valor_total  [= quantidade * valor_unitario]  │
+                         │  custo_unitario                                │
+                         │  venda_unitaria                                │
+                         │  custo_total  [= quantidade * custo_unitario]  │
+                         │  venda_total  [= quantidade * venda_unitaria]  │
+                         │  valor_glosado                                 │
                          └───────────────────────────────────────────────┘
                                               │ SUMPRODUCT (join inline)
                          ┌────────────────────▼──────────────────────────┐
@@ -125,8 +128,8 @@ Tabela de relacionamento paciente ↔ procedimento. Um lançamento por procedime
 **Layout de colunas:**
 
 ```
-A  | B           | C            | D   | E   | F          | G              | H
-id | paciente_id | procedimento | mes | ano | quantidade | valor_unitario | valor_total
+A  | B           | C            | D   | E   | F          | G              | H              | I           | J           | K
+id | paciente_id | procedimento | mes | ano | quantidade | custo_unitario | venda_unitaria | custo_total | venda_total | valor_glosado
 ```
 
 | Coluna | Tipo | Entrada | Descrição |
@@ -137,8 +140,11 @@ id | paciente_id | procedimento | mes | ano | quantidade | valor_unitario | valo
 | D `mes` | Texto | **Dropdown** | `Jan` … `Dez` — usar `REF_Meses!A1:A12` |
 | E `ano` | Inteiro | Manual | Ex: `2025` |
 | F `quantidade` | Inteiro | Manual | Nº de execuções do procedimento no mês |
-| G `valor_unitario` | Decimal | Manual | Valor de uma execução (R$) |
-| H `valor_total` | Decimal | **Fórmula** | `=IF(F2="","",F2*G2)` — não editar |
+| G `custo_unitario` | Decimal | Manual | Valor de custo de uma execução (R$) |
+| H `venda_unitaria` | Decimal | Manual | Valor de venda de uma execução (R$) |
+| I `custo_total` | Decimal | **Fórmula** | `=IF(F2="","",F2*G2)` — não editar |
+| J `venda_total` | Decimal | **Fórmula** | `=IF(F2="","",F2*H2)` — não editar |
+| K `valor_glosado` | Decimal | Manual | Valor glosado sobre o procedimento (R$) |
 
 > **Atenção — espaços no nome dos procedimentos:** os valores em `REF_Procedimentos` possuem espaços à direita (ex: `"Fisioterapia            "`). Ao digitar em `procedimento`, use exatamente o mesmo valor da lista para garantir que as fórmulas de agregação funcionem. O uso de dropdown para essa coluna (ainda não configurado na planilha) eliminaria esse risco.
 
