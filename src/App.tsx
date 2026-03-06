@@ -737,8 +737,7 @@ function AnaliticoPacientes() {
                     <span className="text-2xl">{config?.icon}</span>
                     <span className="font-medium">{config?.label}</span>
                   </div>
-                  <p className="text-sm text-muted-foreground">Pacientes: {item.quantidade}</p>
-                  <p className="text-lg font-bold mt-2">{formatCurrency(item.custo)}</p>
+                  <p className="text-lg font-bold mt-2">Pacientes: {item.quantidade}</p>
                 </div>
               )
             })}
@@ -944,24 +943,22 @@ function DashboardApp() {
                   <CardTitle className="text-base">Resumo por Faixa</CardTitle>
                 </CardHeader>
                 <CardContent className="flex items-center justify-center">
-                  <ResponsiveContainer width="100%" height={250}>
+                  <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
                         data={faixaEtaria}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={80}
+                        innerRadius={60}
+                        outerRadius={100}
                         paddingAngle={4}
                         dataKey="qtd"
                         nameKey="faixa"
-                        label={(props: any) => `${props.faixa}: ${props.qtd}`}
                       >
                         {faixaEtaria.map((entry, index) => (
                           <Cell key={index} fill={FAIXA_CORES[entry.faixa] || COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
                       <Tooltip />
+                      <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </CardContent>
