@@ -390,27 +390,23 @@ function FormPacientes() {
                             emptyMessage="Não encontrado."
                         />
                     </div>
-                    {/* Optional extra fields for edit mode to allow full modification */}
-                    {isEditing && (
-                        <>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Nascimento</label>
-                                <input value={nasc} onChange={e => setNasc(e.target.value)} type="date" className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Pacote</label>
-                                <input value={pacote} onChange={e => setPacote(e.target.value)} className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="Ex: SIM" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Entrada</label>
-                                <input value={entrada} onChange={e => setEntrada(e.target.value)} type="date" className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Saída</label>
-                                <input value={saida} onChange={e => setSaida(e.target.value)} type="date" className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" />
-                            </div>
-                        </>
-                    )}
+                    {/* Extra fields for both modes to allow full configuration */}
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Nascimento</label>
+                        <input value={nasc} onChange={e => setNasc(e.target.value)} type="date" className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Pacote</label>
+                        <input value={pacote} onChange={e => setPacote(e.target.value)} className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="Ex: SIM" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Entrada</label>
+                        <input value={entrada} onChange={e => setEntrada(e.target.value)} type="date" className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium mb-1">Saída</label>
+                        <input value={saida} onChange={e => setSaida(e.target.value)} type="date" className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                    </div>
                     <div className="flex items-end">
                         {isEditing ? (
                             <button onClick={handleUpdateExisting} disabled={!nome || !municipio || !operadora || !acomodacao || !statusPaciente} className="h-10 px-4 w-full bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors">
@@ -593,6 +589,8 @@ function FormRealizados() {
             paciente_id: p.pacienteId,
             proc: p.proc,
             qtd: p.qtd,
+            unit: p.unitPreview,
+            valor_total: p.valor_totalPreview
         }))
 
         try {
