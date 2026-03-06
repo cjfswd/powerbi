@@ -4,15 +4,18 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, AreaChart, Area
+  PieChart, Pie, Cell, AreaChart, Area, Legend
 } from "recharts"
 import {
   DollarSign, Users, TrendingUp, AlertTriangle, Building2, MapPin,
-  Activity, FileText, Home, ChevronDown, ChevronUp
+  Activity, ChevronDown, ChevronUp
 } from "lucide-react"
+
 import { useDashboard } from "@/lib/DashboardDataContext"
 import { ComboboxFilter } from "@/components/ui/combobox-filter"
 import { DataEntry } from "@/components/DataEntry"
+import { AuthProvider, useAuth } from "@/lib/AuthContext"
+import { Login } from "@/components/Login"
 
 function formatCurrency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
@@ -118,7 +121,7 @@ function KpiSection() {
 function FaturamentoMensalChart() {
   const { faturamentoMensal } = useDashboard()
   return (
-    <Card className="col-span-full lg:col-span-2">
+    <Card>
       <CardHeader>
         <CardTitle className="text-base">Faturamento Mensal 2025</CardTitle>
       </CardHeader>
@@ -162,14 +165,13 @@ function DistribuicaoAssistenciaChart() {
               paddingAngle={3}
               dataKey="valor"
               nameKey="tipo"
-              label={(props: any) => `${props.tipo} ${(props.percent * 100).toFixed(0)}%`}
-              labelLine={false}
             >
               {distribuicaoAssistencia.map((entry, index) => (
                 <Cell key={index} fill={entry.cor} />
               ))}
             </Pie>
             <Tooltip formatter={(value: any) => formatCurrency(value as number)} />
+            <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
           </PieChart>
         </ResponsiveContainer>
       </CardContent>
@@ -237,24 +239,24 @@ function SexoChart() {
         <CardTitle className="text-base">Perfil Beneficiários (Sexo)</CardTitle>
       </CardHeader>
       <CardContent className="flex items-center justify-center">
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
               data={perfilSexo}
               cx="50%"
               cy="50%"
-              innerRadius={50}
-              outerRadius={80}
+              innerRadius={60}
+              outerRadius={100}
               paddingAngle={4}
               dataKey="percentual"
               nameKey="sexo"
-              label={(props: any) => `${props.sexo} ${props.percentual}%`}
             >
               {perfilSexo.map((entry, index) => (
                 <Cell key={index} fill={entry.cor} />
               ))}
             </Pie>
             <Tooltip formatter={(value: any) => `${value}%`} />
+            <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
           </PieChart>
         </ResponsiveContainer>
       </CardContent>
@@ -296,6 +298,42 @@ function OperadoraChart() {
   )
 }
 
+const FAIXA_CORES: Record<string, string> = {
+  "0-11": "#2563eb",
+  "12-17": "#7c3aed",
+  "18-29": "#db2777",
+  "30-59": "#ea580c",
+  "60-79": "#65a30d",
+  "80+": "#0891b2",
+  "S/I": "#94a3b8",
+}
+
+function FaixaEtariaChart() {
+  const { faixaEtaria } = useDashboard()
+  return (
+    <Card className="col-span-full lg:col-span-2">
+      <CardHeader>
+        <CardTitle className="text-base">Distribuição por Faixa Etária</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={350}>
+          <BarChart data={faixaEtaria}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <XAxis dataKey="faixa" className="text-xs" />
+            <YAxis tickFormatter={(v) => formatCompact(v)} className="text-xs" />
+            <Tooltip content={<CustomTooltipCurrency />} />
+            <Bar dataKey="valorFaturado" radius={[4, 4, 0, 0]}>
+              {faixaEtaria.map((entry, index) => (
+                <Cell key={index} fill={FAIXA_CORES[entry.faixa] || COLORS[index % COLORS.length]} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  )
+}
+
 function AcomodacaoChart() {
   const { tipoAcomodacao } = useDashboard()
   return (
@@ -304,57 +342,28 @@ function AcomodacaoChart() {
         <CardTitle className="text-base">Tipo de Acomodação</CardTitle>
       </CardHeader>
       <CardContent className="flex items-center justify-center">
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
               data={tipoAcomodacao}
               cx="50%"
               cy="50%"
-              innerRadius={50}
-              outerRadius={80}
+              innerRadius={60}
+              outerRadius={100}
               paddingAngle={4}
               dataKey="valor"
               nameKey="label"
-              label={(props: any) => `${props.label} ${((props.percent ?? 0) * 100).toFixed(0)}%`}
             >
               {tipoAcomodacao.map((entry, index) => (
                 <Cell key={index} fill={entry.cor} />
               ))}
             </Pie>
             <Tooltip formatter={(value: any) => formatCurrency(value as number)} />
+            <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
           </PieChart>
         </ResponsiveContainer>
       </CardContent>
     </Card>
-  )
-}
-
-function InfoCards() {
-  const { tipoGuia, areaPrestador, tipoDespesa } = useDashboard()
-  const items = [
-    { icon: FileText, label: "Tipo de Guia", value: tipoGuia.tipo, detail: formatCurrency(tipoGuia.valor) },
-    { icon: MapPin, label: "Área do Prestador", value: areaPrestador.area, detail: formatCurrency(areaPrestador.valor) },
-    { icon: Home, label: "Tipo de Despesa", value: tipoDespesa.tipo, detail: formatCurrency(tipoDespesa.valor) },
-  ]
-  return (
-    <div className="grid gap-4 md:grid-cols-3">
-      {items.map((item, i) => (
-        <Card key={i}>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="rounded-md p-2 bg-blue-100 text-blue-600">
-                <item.icon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{item.label}</p>
-                <p className="font-semibold">{item.value}</p>
-                <p className="text-xs text-muted-foreground">{item.detail}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
   )
 }
 
@@ -728,8 +737,7 @@ function AnaliticoPacientes() {
                     <span className="text-2xl">{config?.icon}</span>
                     <span className="font-medium">{config?.label}</span>
                   </div>
-                  <p className="text-sm text-muted-foreground">Pacientes: {item.quantidade}</p>
-                  <p className="text-lg font-bold mt-2">{formatCurrency(item.custo)}</p>
+                  <p className="text-lg font-bold mt-2">Pacientes: {item.quantidade}</p>
                 </div>
               )
             })}
@@ -740,8 +748,10 @@ function AnaliticoPacientes() {
   )
 }
 
-function App() {
-  const { distribuicaoMunicipio, valorOperadora, kpis, globalOperadora, setGlobalOperadora } = useDashboard()
+function DashboardApp() {
+  const { distribuicaoMunicipio, valorOperadora, todasOperadoras, kpis, globalOperadora, setGlobalOperadora, faixaEtaria } = useDashboard()
+  const { user, logout } = useAuth()
+
   return (
     <div className="min-h-screen bg-muted/30">
       {/* Header */}
@@ -758,13 +768,28 @@ function App() {
                 onChange={(e) => setGlobalOperadora(e.target.value)}
               >
                 <option value="todas">Todas Operadoras</option>
-                {valorOperadora.map(o => (
-                  <option key={o.operadora} value={o.operadora}>{o.operadora}</option>
+                {todasOperadoras?.map(op => (
+                  <option key={op} value={op}>{op}</option>
                 ))}
               </select>
               <h1 className="text-lg font-bold leading-none"></h1>
               <p className="text-xs text-muted-foreground">Faturamento 2025 - Atendimento Domiciliar</p>
             </div>
+          </div>
+
+          <div className="ml-auto flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center border font-medium text-xs">
+                {user?.substring(0, 2).toUpperCase()}
+              </div>
+              <span className="text-sm font-medium hidden sm:inline-block">{user}</span>
+            </div>
+            <button
+              onClick={logout}
+              className="text-xs font-medium px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Sair
+            </button>
           </div>
         </div>
       </header>
@@ -781,6 +806,7 @@ function App() {
             <TabsTrigger value="procedimentos">Procedimentos</TabsTrigger>
             <TabsTrigger value="geografico">Geográfico</TabsTrigger>
             <TabsTrigger value="operadoras">Operadoras</TabsTrigger>
+            <TabsTrigger value="faixa-etaria">Faixa Etária</TabsTrigger>
             <TabsTrigger value="horas">Atendimento Horas</TabsTrigger>
             <TabsTrigger value="analitico">Analítico</TabsTrigger>
             <TabsTrigger value="inserir">Inserir Dados</TabsTrigger>
@@ -788,14 +814,37 @@ function App() {
 
           {/* Visao Geral */}
           <TabsContent value="visao-geral" className="space-y-6">
-            <div className="grid gap-4 lg:grid-cols-3">
-              <FaturamentoMensalChart />
-              <DistribuicaoAssistenciaChart />
-            </div>
-            <InfoCards />
+            <FaturamentoMensalChart />
+
             <div className="grid gap-4 md:grid-cols-2">
+              <DistribuicaoAssistenciaChart />
               <SexoChart />
               <AcomodacaoChart />
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Faixa Etária (Qtd)</CardTitle>
+                </CardHeader>
+                <CardContent className="flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={faixaEtaria}
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={2}
+                        dataKey="qtd"
+                        nameKey="faixa"
+                      >
+                        {faixaEtaria.map((entry, index) => (
+                          <Cell key={index} fill={FAIXA_CORES[entry.faixa] || COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
 
@@ -885,6 +934,72 @@ function App() {
             </Card>
           </TabsContent>
 
+          {/* Faixa Etária */}
+          <TabsContent value="faixa-etaria" className="space-y-6">
+            <div className="grid gap-4 lg:grid-cols-3">
+              <FaixaEtariaChart />
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Resumo por Faixa</CardTitle>
+                </CardHeader>
+                <CardContent className="flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={faixaEtaria}
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={4}
+                        dataKey="qtd"
+                        nameKey="faixa"
+                      >
+                        {faixaEtaria.map((entry, index) => (
+                          <Cell key={index} fill={FAIXA_CORES[entry.faixa] || COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Detalhamento por Faixa Etária</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Faixa Etária</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead className="text-right">Qtd. Pacientes</TableHead>
+                      <TableHead className="text-right">Valor Faturado</TableHead>
+                      <TableHead className="text-right">% do Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {faixaEtaria.map((f, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: FAIXA_CORES[f.faixa] }} />
+                            {f.faixa}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{f.descricao}</TableCell>
+                        <TableCell className="text-right">{f.qtd}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(f.valorFaturado)}</TableCell>
+                        <TableCell className="text-right">{f.percentual}%</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* Atendimento por Horas */}
           <TabsContent value="horas" className="space-y-6">
             <AtendimentoHorasChart />
@@ -907,7 +1022,7 @@ function App() {
       {/* Footer */}
       <footer className="border-t mt-8">
         <div className="max-w-[1400px] mx-auto px-6 py-4 flex items-center justify-between text-xs text-muted-foreground">
-          <span>Unimed Nova Iguaçu / Camperj Dashboard - Faturamento 2025</span>
+          <span>Healthmais Dashboard de Power BI - Faturamento 2025</span>
           <span>Dados referentes ao exercício 2025 - Atendimento Domiciliar</span>
         </div>
       </footer>
@@ -915,4 +1030,31 @@ function App() {
   )
 }
 
-export default App
+function AppContent() {
+  const { user, isLoading } = useAuth()
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="h-12 w-12 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
+          <p className="mt-4 text-sm font-medium text-muted-foreground">Verificando acesso...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <Login />
+  }
+
+  return <DashboardApp />
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  )
+}

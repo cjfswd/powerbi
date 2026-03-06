@@ -26,7 +26,11 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     setError(null)
 
-    fetch('/api/sheets')
+    const query = globalOperadora && globalOperadora !== 'todas'
+      ? `?operadora=${encodeURIComponent(globalOperadora)}`
+      : ''
+
+    fetch(`/api/sheets${query}`)
       .then(async (res) => {
         if (!res.ok) {
           const body = await res.text()
@@ -47,7 +51,7 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
         console.error("Failed to load dashboard data from API:", err)
       })
       .finally(() => setLoading(false))
-  }, [])
+  }, [globalOperadora])
 
   return (
     <DashboardDataContext.Provider value={{ ...value, globalOperadora, setGlobalOperadora }}>
