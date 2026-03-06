@@ -1,4 +1,4 @@
-import { getGoogleSheetsClient } from './lib/google';
+import { getGoogleSheetsClient } from './lib/google.js';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'POST' && req.method !== 'PUT') {
