@@ -4,12 +4,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, AreaChart, Area
+  PieChart, Pie, Cell, AreaChart, Area, Legend
 } from "recharts"
 import {
   DollarSign, Users, TrendingUp, AlertTriangle, Building2, MapPin,
-  Activity, FileText, Home, ChevronDown, ChevronUp
+  Activity, ChevronDown, ChevronUp
 } from "lucide-react"
+
 import { useDashboard } from "@/lib/DashboardDataContext"
 import { ComboboxFilter } from "@/components/ui/combobox-filter"
 import { DataEntry } from "@/components/DataEntry"
@@ -120,7 +121,7 @@ function KpiSection() {
 function FaturamentoMensalChart() {
   const { faturamentoMensal } = useDashboard()
   return (
-    <Card className="col-span-full lg:col-span-2">
+    <Card>
       <CardHeader>
         <CardTitle className="text-base">Faturamento Mensal 2025</CardTitle>
       </CardHeader>
@@ -164,14 +165,13 @@ function DistribuicaoAssistenciaChart() {
               paddingAngle={3}
               dataKey="valor"
               nameKey="tipo"
-              label={(props: any) => `${props.tipo} ${(props.percent * 100).toFixed(0)}%`}
-              labelLine={false}
             >
               {distribuicaoAssistencia.map((entry, index) => (
                 <Cell key={index} fill={entry.cor} />
               ))}
             </Pie>
             <Tooltip formatter={(value: any) => formatCurrency(value as number)} />
+            <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
           </PieChart>
         </ResponsiveContainer>
       </CardContent>
@@ -239,24 +239,24 @@ function SexoChart() {
         <CardTitle className="text-base">Perfil Beneficiários (Sexo)</CardTitle>
       </CardHeader>
       <CardContent className="flex items-center justify-center">
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
               data={perfilSexo}
               cx="50%"
               cy="50%"
-              innerRadius={50}
-              outerRadius={80}
+              innerRadius={60}
+              outerRadius={100}
               paddingAngle={4}
               dataKey="percentual"
               nameKey="sexo"
-              label={(props: any) => `${props.sexo} ${props.percentual}%`}
             >
               {perfilSexo.map((entry, index) => (
                 <Cell key={index} fill={entry.cor} />
               ))}
             </Pie>
             <Tooltip formatter={(value: any) => `${value}%`} />
+            <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
           </PieChart>
         </ResponsiveContainer>
       </CardContent>
@@ -342,57 +342,28 @@ function AcomodacaoChart() {
         <CardTitle className="text-base">Tipo de Acomodação</CardTitle>
       </CardHeader>
       <CardContent className="flex items-center justify-center">
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
               data={tipoAcomodacao}
               cx="50%"
               cy="50%"
-              innerRadius={50}
-              outerRadius={80}
+              innerRadius={60}
+              outerRadius={100}
               paddingAngle={4}
               dataKey="valor"
               nameKey="label"
-              label={(props: any) => `${props.label} ${((props.percent ?? 0) * 100).toFixed(0)}%`}
             >
               {tipoAcomodacao.map((entry, index) => (
                 <Cell key={index} fill={entry.cor} />
               ))}
             </Pie>
             <Tooltip formatter={(value: any) => formatCurrency(value as number)} />
+            <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
           </PieChart>
         </ResponsiveContainer>
       </CardContent>
     </Card>
-  )
-}
-
-function InfoCards() {
-  const { tipoGuia, areaPrestador, tipoDespesa } = useDashboard()
-  const items = [
-    { icon: FileText, label: "Tipo de Guia", value: tipoGuia.tipo, detail: formatCurrency(tipoGuia.valor) },
-    { icon: MapPin, label: "Área do Prestador", value: areaPrestador.area, detail: formatCurrency(areaPrestador.valor) },
-    { icon: Home, label: "Tipo de Despesa", value: tipoDespesa.tipo, detail: formatCurrency(tipoDespesa.valor) },
-  ]
-  return (
-    <div className="grid gap-4 md:grid-cols-3">
-      {items.map((item, i) => (
-        <Card key={i}>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="rounded-md p-2 bg-blue-100 text-blue-600">
-                <item.icon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">{item.label}</p>
-                <p className="font-semibold">{item.value}</p>
-                <p className="text-xs text-muted-foreground">{item.detail}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
   )
 }
 
@@ -844,25 +815,23 @@ function DashboardApp() {
 
           {/* Visao Geral */}
           <TabsContent value="visao-geral" className="space-y-6">
-            <div className="grid gap-4 lg:grid-cols-3">
-              <FaturamentoMensalChart />
+            <FaturamentoMensalChart />
+
+            <div className="grid gap-4 md:grid-cols-2">
               <DistribuicaoAssistenciaChart />
-            </div>
-            <InfoCards />
-            <div className="grid gap-4 md:grid-cols-3">
               <SexoChart />
               <AcomodacaoChart />
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Faixa Etária (Qtd)</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={200}>
+                <CardContent className="flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
                         data={faixaEtaria}
-                        innerRadius={40}
-                        outerRadius={60}
+                        innerRadius={60}
+                        outerRadius={100}
                         paddingAngle={2}
                         dataKey="qtd"
                         nameKey="faixa"
@@ -872,6 +841,7 @@ function DashboardApp() {
                         ))}
                       </Pie>
                       <Tooltip />
+                      <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </CardContent>
