@@ -50,6 +50,8 @@ export const valorOperadora = [
   { operadora: "Camperj", valor: 1543878.05 },
 ]
 
+export const todasOperadoras = valorOperadora.map(o => o.operadora)
+
 export const tipoAcomodacao = [
   { tipo: "ID", label: "Internação Domiciliar", valor: 3577064.84, cor: "#2563eb" },
   { tipo: "AD", label: "Atendimento Domiciliar", valor: 1074880.80, cor: "#7c3aed" },

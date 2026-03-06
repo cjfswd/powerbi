@@ -749,7 +749,7 @@ function AnaliticoPacientes() {
 }
 
 function DashboardApp() {
-  const { distribuicaoMunicipio, valorOperadora, kpis, globalOperadora, setGlobalOperadora, faixaEtaria } = useDashboard()
+  const { distribuicaoMunicipio, valorOperadora, todasOperadoras, kpis, globalOperadora, setGlobalOperadora, faixaEtaria } = useDashboard()
   const { user, logout } = useAuth()
 
   return (
@@ -768,8 +768,8 @@ function DashboardApp() {
                 onChange={(e) => setGlobalOperadora(e.target.value)}
               >
                 <option value="todas">Todas Operadoras</option>
-                {valorOperadora.map(o => (
-                  <option key={o.operadora} value={o.operadora}>{o.operadora}</option>
+                {todasOperadoras?.map(op => (
+                  <option key={op} value={op}>{op}</option>
                 ))}
               </select>
               <h1 className="text-lg font-bold leading-none"></h1>

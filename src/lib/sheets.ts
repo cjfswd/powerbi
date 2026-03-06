@@ -23,6 +23,7 @@ export interface DashboardData {
   tipoGuia: { tipo: string; valor: number }
   areaPrestador: { area: string; valor: number }
   tipoDespesa: { tipo: string; valor: number }
+  todasOperadoras: string[]
   pacientes: {
     id: number
     nome: string

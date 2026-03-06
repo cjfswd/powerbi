@@ -132,11 +132,12 @@ export default async function handler(req: any, res: any) {
       .map(r => ({ municipio: str(r[0]), valor: num(r[2]) }))
       .sort((a, b) => b.valor - a.valor)
 
-    // --- AGG_Operadoras → { operadora, valor } --------------------------------
     let valorOperadora = dataRows(rawOperadoras)
       .filter(r => r[0])
       .map(r => ({ operadora: str(r[0]), valor: num(r[2]) }))
       .sort((a, b) => b.valor - a.valor)
+
+    const todasOperadoras = valorOperadora.map(o => o.operadora)
 
     // --- AGG_Procedimentos → { procedimento, valor } -------------------------
     let tipoProcedimento = dataRows(rawProcedimentos)
@@ -406,6 +407,7 @@ export default async function handler(req: any, res: any) {
       distribuicaoMunicipio,
       perfilSexo,
       valorOperadora,
+      todasOperadoras,
       tipoAcomodacao,
       tipoGuia: { tipo: 'SP/SADT', valor: valorTotalPago },
       areaPrestador: { area: 'Rio de Janeiro', valor: valorTotalPago },
