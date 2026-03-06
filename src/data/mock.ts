@@ -101,3 +101,12 @@ export const refProcedimentos: { procedimento: string; dataCriacao: string; valo
   }))
 ]
 
+export const faixaEtaria = [
+  { faixa: "0-11", descricao: "Criança", qtd: 5, percentual: 4.5, valorFaturado: 150000, valorGlosado: 0 },
+  { faixa: "12-17", descricao: "Adolescente", qtd: 8, percentual: 7.3, valorFaturado: 280000, valorGlosado: 0 },
+  { faixa: "18-29", descricao: "Jovem Adulto", qtd: 12, percentual: 10.9, valorFaturado: 450000, valorGlosado: 0 },
+  { faixa: "30-59", descricao: "Adulto", qtd: 35, percentual: 31.8, valorFaturado: 1200000, valorGlosado: 0 },
+  { faixa: "60-79", descricao: "Idoso", qtd: 30, percentual: 27.3, valorFaturado: 1500000, valorGlosado: 0 },
+  { faixa: "80+", descricao: "Idoso em Idade Avançada", qtd: 20, percentual: 18.2, valorFaturado: 1071945.64, valorGlosado: 0 },
+]
+

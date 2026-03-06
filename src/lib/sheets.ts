@@ -34,4 +34,12 @@ export interface DashboardData {
     horasAtendimento?: { '3h': number; '6h': number; '12h': number; '24h': number }
   }[]
   refProcedimentos?: { procedimento: string; dataCriacao: string; valor: number; ativo: boolean }[]
+  faixaEtaria: {
+    faixa: string
+    descricao: string
+    qtd: number
+    percentual: number
+    valorFaturado: number
+    valorGlosado: number
+  }[]
 }

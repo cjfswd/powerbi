@@ -86,8 +86,9 @@ export default async function handler(req: any, res: any) {
       'AGG_Acomodacao!A:C',           // [5] codigo, qtd_pacientes, valor_total
       'AGG_Pacote_Horas!A:D',         // [6] pacote, qtd_ativos, percentual, valor_total
       'Pacientes!A:K',                // [7] id, nome, municipio, nasc, sexo, oper, acom, status, pacote, entrada, saida
-      'Procedimentos_Realizados!A:H', // [8] id, paciente_id, proc, mes, ano, qtd, unit, valor_total
-      'Ref_Procedimentos!A:D',        // [9] procedimento, data_criacao, valor, status_ativo
+      'Procedimentos_Realizados!A:I', // [8] id, paciente_id, proc, mes, ano, qtd, unit, valor_total, valor_glosado
+      'REF_Procedimentos!A:F',         // [9] procedimento, valor, status, data_insercao, data_atualizacao, valores_anteriores
+      'AGG_Faixa_Etaria!A:F',         // [10] faixa_etaria, qtd, %, desc, faturado, glosado
     ]
 
     const [
@@ -101,6 +102,7 @@ export default async function handler(req: any, res: any) {
       rawPacientes,
       rawPR,
       rawRefProcedimentos,
+      rawFaixaEtaria,
     ] = await batchGet(spreadsheetId, apiKey, RANGES)
 
     // --- AGG_Faturamento_Mensal → { mes, valor } ----------------------------
@@ -164,13 +166,30 @@ export default async function handler(req: any, res: any) {
         cor: PACOTE_CORES[str(r[0])] ?? '#6366f1',
       }))
 
+    // --- AGG_Faixa_Etaria → { faixa, descricao, qtd, percentual, valorFaturado, valorGlosado }
+    const faixaEtaria = dataRows(rawFaixaEtaria)
+      .filter(r => r[0] && str(r[0]).toLowerCase() !== 'total_ativos')
+      .map(r => ({
+        faixa: str(r[0]),
+        qtd: num(r[1]),
+        percentual: num(str(r[2]).replace('%', '')),
+        descricao: str(r[3]),
+        valorFaturado: num(r[4]),
+        valorGlosado: num(r[5]),
+      }))
+
     // --- Procedimentos_Realizados → custo por paciente -----------------------
-    // Sum valor_total (col H, index 7) grouped by paciente_id (col B, index 1)
+    // Sum valor_total (col H, index 7) and valor_glosado (col I, index 8) grouped by paciente_id (col B, index 1)
     const custoPorPaciente: Record<number, number> = {}
+    const glosaPorPaciente: Record<number, number> = {}
     dataRows(rawPR).forEach(r => {
       const pid = num(r[1])
       const valor = num(r[7])
-      if (pid > 0) custoPorPaciente[pid] = (custoPorPaciente[pid] ?? 0) + valor
+      const glosa = num(r[8])
+      if (pid > 0) {
+        custoPorPaciente[pid] = (custoPorPaciente[pid] ?? 0) + valor
+        glosaPorPaciente[pid] = (glosaPorPaciente[pid] ?? 0) + glosa
+      }
     })
 
     // --- Pacientes → patient list ---------------------------------------------
@@ -186,20 +205,18 @@ export default async function handler(req: any, res: any) {
         acomodacao: str(r[6]),
       }))
 
-    // --- Ref_Procedimentos → historical pricing references --------------------
-    // Determine if we should skip the header or not. 
-    // If the first row's first cell is exactly "procedimento", we skip it.
-    const refProtRaw = (rawRefProcedimentos[0] && str(rawRefProcedimentos[0][0]).toLowerCase() === 'procedimento')
-      ? dataRows(rawRefProcedimentos)
-      : rawRefProcedimentos
-
-    const refProcedimentos = refProtRaw
+    // --- REF_Procedimentos → reference pricing list (6-col standardized schema) ----
+    // Schema: procedimento | valor | status | data_insercao | data_atualizacao | valores_anteriores
+    const refProcedimentos = dataRows(rawRefProcedimentos)
       .filter(r => r[0])
       .map(r => ({
         procedimento: str(r[0]),
-        dataCriacao: str(r[1]),
-        valor: num(r[2]),
-        ativo: str(r[3]).toLowerCase() !== 'falso' && str(r[3]).toLowerCase() !== 'inativo' // Defaults to true if empty or anything else
+        valor: num(r[1]),
+        ativo: str(r[2]).toLowerCase() !== 'inativo',
+        status: str(r[2]) || 'Ativo',
+        dataInsercao: str(r[3]),
+        dataAtualizacao: str(r[4]),
+        valoresAnteriores: str(r[5]),
       }))
 
     // --- KPIs (derived from AGG data) -----------------------------------------
@@ -233,6 +250,7 @@ export default async function handler(req: any, res: any) {
       tipoDespesa: { tipo: 'Atendimento Domiciliar', valor: valorTotalPago },
       pacientes,
       refProcedimentos,
+      faixaEtaria,
     }
 
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
