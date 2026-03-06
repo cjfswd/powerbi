@@ -43,7 +43,8 @@ export function DataEntry() {
 function FormProcedimento() {
     const { refProcedimentos } = useDashboard()
     const [procedimento, setProcedimento] = useState("")
-    const [valor, setValor] = useState("")
+    const [precoCusto, setPrecoCusto] = useState("")
+    const [precoVenda, setPrecoVenda] = useState("")
     const [ativo, setAtivo] = useState(true)
     const [status, setStatus] = useState("")
     const [isEditing, setIsEditing] = useState(false)
@@ -62,7 +63,8 @@ function FormProcedimento() {
                     action: isEditing ? "update_reference" : "insert_reference",
                     payload: {
                         procedimento,
-                        valor: parseFloat(valor.replace(",", ".")),
+                        precoCusto: parseFloat(precoCusto.replace(",", ".")),
+                        precoVenda: parseFloat(precoVenda.replace(",", ".")),
                         ativo
                     }
                 })
@@ -71,7 +73,8 @@ function FormProcedimento() {
             setStatus("Salvo com sucesso!")
             // Reset form
             setProcedimento("")
-            setValor("")
+            setPrecoCusto("")
+            setPrecoVenda("")
             setAtivo(true)
             setIsEditing(false)
         } catch (err: any) {
@@ -81,7 +84,8 @@ function FormProcedimento() {
 
     function handleEdit(proc: any) {
         setProcedimento(proc.procedimento)
-        setValor(proc.valor.toString())
+        setPrecoCusto(proc.precoCusto?.toString() || "0")
+        setPrecoVenda(proc.precoVenda?.toString() || "0")
         setAtivo(proc.ativo)
         setIsEditing(true)
         setStatus("")
@@ -90,7 +94,8 @@ function FormProcedimento() {
 
     function handleCancelEdit() {
         setProcedimento("")
-        setValor("")
+        setPrecoCusto("")
+        setPrecoVenda("")
         setAtivo(true)
         setIsEditing(false)
         setStatus("")
@@ -114,17 +119,31 @@ function FormProcedimento() {
                     />
                     {isEditing && <p className="text-xs text-muted-foreground mt-1">O nome do procedimento não pode ser alterado na edição.</p>}
                 </div>
-                <div>
-                    <label className="block text-sm font-medium mb-1">Valor Unitário (R$)</label>
-                    <input
-                        required
-                        type="number"
-                        step="0.01"
-                        value={valor}
-                        onChange={e => setValor(e.target.value)}
-                        className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background"
-                        placeholder="Ex: 150.00"
-                    />
+                <div className="flex gap-4">
+                    <div className="flex-1">
+                        <label className="block text-sm font-medium mb-1">Preço Custo (R$)</label>
+                        <input
+                            required
+                            type="number"
+                            step="0.01"
+                            value={precoCusto}
+                            onChange={e => setPrecoCusto(e.target.value)}
+                            className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background"
+                            placeholder="Ex: 100.00"
+                        />
+                    </div>
+                    <div className="flex-1">
+                        <label className="block text-sm font-medium mb-1">Preço Venda (R$)</label>
+                        <input
+                            required
+                            type="number"
+                            step="0.01"
+                            value={precoVenda}
+                            onChange={e => setPrecoVenda(e.target.value)}
+                            className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background"
+                            placeholder="Ex: 150.00"
+                        />
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <input
@@ -164,7 +183,8 @@ function FormProcedimento() {
                         <TableHeader className="sticky top-0 bg-background z-10">
                             <TableRow>
                                 <TableHead>Procedimento</TableHead>
-                                <TableHead className="text-right">Valor Original</TableHead>
+                                <TableHead className="text-right">Custo</TableHead>
+                                <TableHead className="text-right">Venda</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead className="w-[80px] text-right">Ação</TableHead>
                             </TableRow>
@@ -173,7 +193,8 @@ function FormProcedimento() {
                             {filteredProcedures.map((proc, i) => (
                                 <TableRow key={i}>
                                     <TableCell className="font-medium text-sm">{proc.procedimento}</TableCell>
-                                    <TableCell className="text-right text-sm">{formatCurrency(proc.valor)}</TableCell>
+                                    <TableCell className="text-right text-sm">{formatCurrency(proc.precoCusto || 0)}</TableCell>
+                                    <TableCell className="text-right text-sm">{formatCurrency(proc.precoVenda || 0)}</TableCell>
                                     <TableCell className="text-sm">
                                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${proc.ativo ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
                                             {proc.ativo ? "Ativo" : "Inativo"}
@@ -514,22 +535,23 @@ function FormRealizados() {
 
     // Deduplicate procedures for combobox, showing latest price
     // Also track the active status so we only display active ones
-    const latestProcedures = new Map<string, { cleanName: string; price: number; ativo: boolean }>()
+    const latestProcedures = new Map<string, { cleanName: string; precoCusto: number; precoVenda: number; ativo: boolean }>()
 
     if (refProcedimentos) {
         refProcedimentos.forEach(p => {
             const rawName = p.procedimento
             const cleanName = rawName.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim()
-            latestProcedures.set(rawName, { cleanName, price: p.valor, ativo: p.ativo })
+            latestProcedures.set(rawName, { cleanName, precoCusto: p.precoCusto, precoVenda: p.precoVenda, ativo: p.ativo })
         })
     }
 
     const procedureOptions = Array.from(latestProcedures.entries())
         .filter(([_, data]) => data.ativo)
         .map(([rawName, data]) => ({
-            label: data.price > 0 ? `${data.cleanName} (${formatCurrency(data.price)})` : data.cleanName,
+            label: data.precoVenda > 0 ? `${data.cleanName} (Venda: ${formatCurrency(data.precoVenda)})` : data.cleanName,
             value: rawName,
-            price: data.price
+            precoCusto: data.precoCusto,
+            precoVenda: data.precoVenda
         }))
 
     const pacienteOptions = pacientes.map(p => ({
@@ -552,7 +574,8 @@ function FormRealizados() {
 
         // Find the price and clean name
         const procData = latestProcedures.get(selectedProc)
-        const price = procData ? procData.price : 0
+        const custoUnit = procData ? procData.precoCusto : 0
+        const vendaUnit = procData ? procData.precoVenda : 0
         const displayProc = procData ? procData.cleanName : selectedProc
 
         // Look up patient name safely just for previewing
@@ -564,8 +587,10 @@ function FormRealizados() {
             proc: selectedProc, // keep raw for API
             displayProc,      // use clean for UI
             qtd: Number(qtd),
-            unitPreview: price,
-            valor_totalPreview: price * Number(qtd)
+            custo_unitPreview: custoUnit,
+            venda_unitPreview: vendaUnit,
+            custo_totalPreview: custoUnit * Number(qtd),
+            venda_totalPreview: vendaUnit * Number(qtd)
         }
 
         setPending([...pending, newProc])
@@ -589,8 +614,10 @@ function FormRealizados() {
             paciente_id: p.pacienteId,
             proc: p.proc,
             qtd: p.qtd,
-            unit: p.unitPreview,
-            valor_total: p.valor_totalPreview
+            custo_unit: p.custo_unitPreview,
+            venda_unit: p.venda_unitPreview,
+            custo_total: p.custo_totalPreview,
+            venda_total: p.venda_totalPreview
         }))
 
         try {
@@ -668,8 +695,10 @@ function FormRealizados() {
                                 <TableHead>Paciente</TableHead>
                                 <TableHead>Procedimento</TableHead>
                                 <TableHead className="text-right">Qtd</TableHead>
-                                <TableHead className="text-right">Val. Unit</TableHead>
-                                <TableHead className="text-right">Total Realizado</TableHead>
+                                <TableHead className="text-right">Custo Unt.</TableHead>
+                                <TableHead className="text-right">Venda Unt.</TableHead>
+                                <TableHead className="text-right">Total Custo</TableHead>
+                                <TableHead className="text-right">Total Faturado</TableHead>
                                 <TableHead className="w-[80px]"></TableHead>
                             </TableRow>
                         </TableHeader>
@@ -679,8 +708,10 @@ function FormRealizados() {
                                     <TableCell className="font-medium text-xs">{p.pacienteNome}</TableCell>
                                     <TableCell className="text-xs">{p.displayProc || p.proc}</TableCell>
                                     <TableCell className="text-right text-xs">{p.qtd}</TableCell>
-                                    <TableCell className="text-right text-xs">{formatCurrency(p.unitPreview)}</TableCell>
-                                    <TableCell className="text-right font-medium text-xs text-blue-600">{formatCurrency(p.valor_totalPreview)}</TableCell>
+                                    <TableCell className="text-right text-xs">{formatCurrency(p.custo_unitPreview)}</TableCell>
+                                    <TableCell className="text-right text-xs">{formatCurrency(p.venda_unitPreview)}</TableCell>
+                                    <TableCell className="text-right font-medium text-xs text-red-600">{formatCurrency(p.custo_totalPreview)}</TableCell>
+                                    <TableCell className="text-right font-medium text-xs text-blue-600">{formatCurrency(p.venda_totalPreview)}</TableCell>
                                     <TableCell>
                                         <button onClick={() => handleRemove(i)} className="text-red-500 hover:text-red-700 text-xs font-medium">Remover</button>
                                     </TableCell>

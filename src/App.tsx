@@ -7,7 +7,7 @@ import {
   PieChart, Pie, Cell, AreaChart, Area, Legend
 } from "recharts"
 import {
-  DollarSign, Users, TrendingUp, AlertTriangle, Building2, MapPin,
+  DollarSign, Users, TrendingUp, Building2, MapPin,
   Activity, ChevronDown, ChevronUp
 } from "lucide-react"
 
@@ -76,43 +76,40 @@ function KpiSection() {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       <KpiCard
-        title="Valor Total Pago"
+        title="Faturamento Total"
         value={formatCompact(kpis.valorTotalPago)}
         icon={DollarSign}
-        description="Exercício 2025"
+        description="Faturamento Exercício"
+      />
+      <KpiCard
+        title="Custo Total"
+        value={formatCompact(kpis.custoTotal)}
+        icon={Activity}
+        description="Custo dos Realizados"
+      />
+      <KpiCard
+        title="Resultado Bruto"
+        value={formatCompact(kpis.resultadoBruto)}
+        icon={TrendingUp}
+        description="Margem Bruta"
+      />
+      <KpiCard
+        title="Pacientes Ativos"
+        value={kpis.pacientesDistintos.toString()}
+        icon={Users}
+        description="Total de Pacientes"
       />
       <KpiCard
         title="Média Mensal"
         value={formatCompact(kpis.mediaMensalPaga)}
-        icon={TrendingUp}
-        description="Média paga/mês"
+        icon={DollarSign}
+        description="Faturamento/mês"
       />
       <KpiCard
-        title="Total Glosado"
-        value={formatCurrency(kpis.valorTotalGlosado)}
-        icon={AlertTriangle}
-        variant="success"
-        description="Nenhuma glosa"
-      />
-      <KpiCard
-        title="Média Glosa/Mês"
-        value={formatCurrency(kpis.mediaMensalGlosado)}
-        icon={AlertTriangle}
-        variant="success"
-        description="Sem glosas"
-      />
-      <KpiCard
-        title="Pacientes"
-        value={kpis.pacientesDistintos.toString()}
-        icon={Users}
-        description="Pacientes distintos"
-      />
-      <KpiCard
-        title="Custo Médio/Paciente"
+        title="Custo Médio/Pcte"
         value={formatCompact(kpis.custoMedioPaciente)}
         icon={Activity}
-        variant="warning"
-        description="Alta complexidade"
+        description="Despesa média"
       />
     </div>
   )
@@ -560,11 +557,12 @@ function AnaliticoPacientes() {
     return municipioOk && statusOk && operadoraOk
   })
 
-  const custoTotal = pacientesFiltrados.reduce((s, p) => s + p.custo, 0)
+  const custoTotal = pacientesFiltrados.reduce((s, p) => s + p.custoReal, 0)
+  const faturamentoTotal = pacientesFiltrados.reduce((s, p) => s + p.custo, 0)
   const custoPorStatus = statusList.slice(1).map(status => ({
     status,
     quantidade: pacientesFiltrados.filter(p => p.status === status).length,
-    custo: pacientesFiltrados.filter(p => p.status === status).reduce((s, p) => s + p.custo, 0),
+    faturamento: pacientesFiltrados.filter(p => p.status === status).reduce((s, p) => s + p.custo, 0),
   }))
 
   return (
@@ -621,23 +619,21 @@ function AnaliticoPacientes() {
         </Card>
         <Card>
           <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground">Faturamento</p>
+            <p className="text-2xl font-bold text-blue-600">{formatCompact(faturamentoTotal)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Custo Total</p>
-            <p className="text-2xl font-bold">{formatCompact(custoTotal)}</p>
+            <p className="text-2xl font-bold text-red-600">{formatCompact(custoTotal)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Custo Médio</p>
-            <p className="text-2xl font-bold">
-              {pacientesFiltrados.length > 0 ? formatCompact(custoTotal / pacientesFiltrados.length) : "R$ 0"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Acomodação ID</p>
-            <p className="text-2xl font-bold">
-              {pacientesFiltrados.filter(p => p.acomodacao === "ID").length}
+            <p className="text-sm text-muted-foreground">Resultado Bruto</p>
+            <p className="text-2xl font-bold text-green-600">
+              {formatCompact(faturamentoTotal - custoTotal)}
             </p>
           </CardContent>
         </Card>
@@ -659,6 +655,7 @@ function AnaliticoPacientes() {
                 <TableHead>Acomodação</TableHead>
                 <TableHead>Operadora</TableHead>
                 <TableHead className="text-right">Custo</TableHead>
+                <TableHead className="text-right">Faturado</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -694,7 +691,8 @@ function AnaliticoPacientes() {
                         </span>
                       </TableCell>
                       <TableCell className="text-sm truncate max-w-[180px]">{p.operadora}</TableCell>
-                      <TableCell className="text-right font-medium">{formatCurrency(p.custo)}</TableCell>
+                      <TableCell className="text-right font-medium text-red-600">{formatCurrency(p.custoReal)}</TableCell>
+                      <TableCell className="text-right font-medium text-blue-600">{formatCurrency(p.custo)}</TableCell>
                     </TableRow>
 
                     {isExpanded && hasHours && (

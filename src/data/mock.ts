@@ -2,6 +2,8 @@
 
 export const kpis = {
   valorTotalPago: 4651945.64,
+  custoTotal: 2500000.00,
+  resultadoBruto: 2151945.64,
   mediaMensalPaga: 775324.27,
   valorTotalGlosado: 0,
   mediaMensalGlosado: 0,
@@ -74,16 +76,16 @@ export const tipoDespesa = { tipo: "Atendimento Domiciliar", valor: 4651945.64 }
 
 // Dados de pacientes com status
 export const pacientes = [
-  { id: 1, nome: "João Silva", municipio: "Nova Iguaçu", status: "Internação", custo: 45230.50, operadora: "Unimed Nova Iguaçu", acomodacao: "ID", horasAtendimento: { "3h": 5230.50, "6h": 8500.00, "12h": 15000.00, "24h": 16500.00 } },
-  { id: 2, nome: "Maria Santos", municipio: "Rio de Janeiro", status: "Alta", custo: 38500.00, operadora: "Camperj", acomodacao: "AD" },
-  { id: 3, nome: "Carlos Oliveira", municipio: "Belford Roxo", status: "Óbito", custo: 52000.00, operadora: "Unimed Nova Iguaçu", acomodacao: "ID", horasAtendimento: { "3h": 7000.00, "6h": 10000.00, "12h": 18000.00, "24h": 17000.00 } },
-  { id: 4, nome: "Ana Costa", municipio: "Nova Iguaçu", status: "Ouvidoria", custo: 41200.00, operadora: "Camperj", acomodacao: "AD" },
-  { id: 5, nome: "Pedro Gomes", municipio: "S. J. de Meriti", status: "Internação", custo: 48900.00, operadora: "Unimed Nova Iguaçu", acomodacao: "ID", horasAtendimento: { "3h": 6200.00, "6h": 9700.00, "12h": 16500.00, "24h": 16500.00 } },
-  { id: 6, nome: "Lucia Ferreira", municipio: "Nova Iguaçu", status: "Alta", custo: 39800.00, operadora: "Camperj", acomodacao: "AD" },
-  { id: 7, nome: "Roberto Alves", municipio: "Queimados", status: "Internação", custo: 44500.00, operadora: "Unimed Nova Iguaçu", acomodacao: "ID", horasAtendimento: { "3h": 5500.00, "6h": 8200.00, "12h": 14800.00, "24h": 16000.00 } },
-  { id: 8, nome: "Fernanda Lima", municipio: "Rio de Janeiro", status: "Óbito", custo: 50100.00, operadora: "Camperj", acomodacao: "AD" },
-  { id: 9, nome: "Gustavo Martins", municipio: "Mesquita", status: "Alta", custo: 36200.00, operadora: "Unimed Nova Iguaçu", acomodacao: "ID", horasAtendimento: { "3h": 4800.00, "6h": 7500.00, "12h": 12000.00, "24h": 11900.00 } },
-  { id: 10, nome: "Patricia Rocha", municipio: "Nova Iguaçu", status: "Ouvidoria", custo: 42800.00, operadora: "Camperj", acomodacao: "AD" },
+  { id: 1, nome: "João Silva", municipio: "Nova Iguaçu", status: "Internação", custo: 45230.50, custoReal: 25000, operadora: "Unimed Nova Iguaçu", acomodacao: "ID", horasAtendimento: { "3h": 5230.50, "6h": 8500.00, "12h": 15000.00, "24h": 16500.00 } },
+  { id: 2, nome: "Maria Santos", municipio: "Rio de Janeiro", status: "Alta", custo: 38500.00, custoReal: 20000, operadora: "Camperj", acomodacao: "AD" },
+  { id: 3, nome: "Carlos Oliveira", municipio: "Belford Roxo", status: "Óbito", custo: 52000.00, custoReal: 28000, operadora: "Unimed Nova Iguaçu", acomodacao: "ID", horasAtendimento: { "3h": 7000.00, "6h": 10000.00, "12h": 18000.00, "24h": 17000.00 } },
+  { id: 4, nome: "Ana Costa", municipio: "Nova Iguaçu", status: "Ouvidoria", custo: 41200.00, custoReal: 22000, operadora: "Camperj", acomodacao: "AD" },
+  { id: 5, nome: "Pedro Gomes", municipio: "S. J. de Meriti", status: "Internação", custo: 48900.00, custoReal: 26000, operadora: "Unimed Nova Iguaçu", acomodacao: "ID", horasAtendimento: { "3h": 6200.00, "6h": 9700.00, "12h": 16500.00, "24h": 16500.00 } },
+  { id: 6, nome: "Lucia Ferreira", municipio: "Nova Iguaçu", status: "Alta", custo: 39800.00, custoReal: 21000, operadora: "Camperj", acomodacao: "AD" },
+  { id: 7, nome: "Roberto Alves", municipio: "Queimados", status: "Internação", custo: 44500.00, custoReal: 24000, operadora: "Unimed Nova Iguaçu", acomodacao: "ID", horasAtendimento: { "3h": 5500.00, "6h": 8200.00, "12h": 14800.00, "24h": 16000.00 } },
+  { id: 8, nome: "Fernanda Lima", municipio: "Rio de Janeiro", status: "Óbito", custo: 50100.00, custoReal: 27000, operadora: "Camperj", acomodacao: "AD" },
+  { id: 9, nome: "Gustavo Martins", municipio: "Mesquita", status: "Alta", custo: 36200.00, custoReal: 19000, operadora: "Unimed Nova Iguaçu", acomodacao: "ID", horasAtendimento: { "3h": 4800.00, "6h": 7500.00, "12h": 12000.00, "24h": 11900.00 } },
+  { id: 10, nome: "Patricia Rocha", municipio: "Nova Iguaçu", status: "Ouvidoria", custo: 42800.00, custoReal: 23000, operadora: "Camperj", acomodacao: "AD" },
 ]
 
 // Mapa de status com cores
@@ -94,11 +96,12 @@ export const statusPacienteConfig = {
   "Ouvidoria": { label: "Ouvidoria", cor: "#f59e0b", icon: "📋" },
 }
 
-export const refProcedimentos: { procedimento: string; dataCriacao: string; valor: number; ativo: boolean }[] = [
+export const refProcedimentos: { procedimento: string; dataCriacao: string; precoCusto: number; precoVenda: number; ativo: boolean }[] = [
   ...tipoProcedimento.map(p => ({
     procedimento: p.procedimento,
     dataCriacao: new Date().toISOString(),
-    valor: Math.round(p.valor / 100),
+    precoCusto: Math.round(p.valor / 200),
+    precoVenda: Math.round(p.valor / 100),
     ativo: true // mock default
   }))
 ]

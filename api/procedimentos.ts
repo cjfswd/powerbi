@@ -26,17 +26,18 @@ export default async function handler(req: any, res: any) {
         };
 
         if (action === 'insert_reference') {
-            // payload: { procedimento, valor, ativo }
-            // Schema: procedimento | valor | status | data_insercao | data_atualizacao | valores_anteriores
-            if (!payload.procedimento || payload.valor === undefined) {
-                return res.status(400).json({ error: 'Missing procedimento or valor' });
+            // payload: { procedimento, precoCusto, precoVenda, ativo }
+            // Schema: procedimento | preco_custo | preco_venda | status | data_insercao | data_atualizacao | valores_anteriores
+            if (!payload.procedimento || payload.precoCusto === undefined || payload.precoVenda === undefined) {
+                return res.status(400).json({ error: 'Missing procedimento, precoCusto or precoVenda' });
             }
 
             const now = formatDate(new Date());
             const status = payload.ativo === false ? 'Inativo' : 'Ativo';
             const row = [
                 payload.procedimento,
-                payload.valor,
+                payload.precoCusto,
+                payload.precoVenda,
                 status,
                 now,   // data_insercao
                 now,   // data_atualizacao
@@ -45,7 +46,7 @@ export default async function handler(req: any, res: any) {
 
             const response = await sheets.spreadsheets.values.append({
                 spreadsheetId,
-                range: 'REF_Procedimentos!A:F',
+                range: 'REF_Procedimentos!A:G',
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'INSERT_ROWS',
                 requestBody: { values: [row] },
@@ -55,15 +56,15 @@ export default async function handler(req: any, res: any) {
         }
 
         if (action === 'update_reference') {
-            // payload: { procedimento, valor, ativo }
-            // Schema: procedimento | valor | status | data_insercao | data_atualizacao | valores_anteriores
-            if (!payload.procedimento || payload.valor === undefined) {
-                return res.status(400).json({ error: 'Missing procedimento or valor' });
+            // payload: { procedimento, precoCusto, precoVenda, ativo }
+            // Schema: procedimento | preco_custo | preco_venda | status | data_insercao | data_atualizacao | valores_anteriores
+            if (!payload.procedimento || payload.precoCusto === undefined || payload.precoVenda === undefined) {
+                return res.status(400).json({ error: 'Missing procedimento, precoCusto or precoVenda' });
             }
 
             const result = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: 'REF_Procedimentos!A:F',
+                range: 'REF_Procedimentos!A:G',
             });
             const rows = result.data.values || [];
 
@@ -80,24 +81,26 @@ export default async function handler(req: any, res: any) {
             // valores_anteriores: snapshot of the full row before this update (JSON array)
             const valoresAnteriores = JSON.stringify({
                 procedimento: existingRow[0] || '',
-                valor: existingRow[1] || '',
-                status: existingRow[2] || '',
-                data_insercao: existingRow[3] || '',
-                data_atualizacao: existingRow[4] || '',
+                preco_custo: existingRow[1] || '',
+                preco_venda: existingRow[2] || '',
+                status: existingRow[3] || '',
+                data_insercao: existingRow[4] || '',
+                data_atualizacao: existingRow[5] || '',
             });
 
             const updateRow = [
                 payload.procedimento,
-                payload.valor,
+                payload.precoCusto,
+                payload.precoVenda,
                 status,
-                existingRow[3] || now,  // data_insercao (preserve original)
+                existingRow[4] || now,  // data_insercao (preserve original)
                 now,                    // data_atualizacao (refreshed)
                 valoresAnteriores,      // valores_anteriores
             ];
 
             const response = await sheets.spreadsheets.values.update({
                 spreadsheetId,
-                range: `REF_Procedimentos!A${rowIndex}:F${rowIndex}`,
+                range: `REF_Procedimentos!A${rowIndex}:G${rowIndex}`,
                 valueInputOption: 'USER_ENTERED',
                 requestBody: { values: [updateRow] },
             });
@@ -106,14 +109,14 @@ export default async function handler(req: any, res: any) {
         }
 
         if (action === 'batch_insert_realizados') {
-            // payload: { month, year, procedures: [{ paciente_id, proc, qtd, unit, valor_total }] }
-            // This allows the frontend to send the pre-calculated `unit` and `valor_total` 
+            // payload: { month, year, procedimentos: [{ paciente_id, proc, qtd, custo_unit, venda_unit, custo_total, venda_total }] }
+            // This allows the frontend to send the pre-calculated units
             // based on the historical `Ref_Procedimentos` table.
             if (!payload.procedimentos || !Array.isArray(payload.procedimentos)) {
                 return res.status(400).json({ error: 'Missing procedimentos array' });
             }
 
-            // sheet format: id, paciente_id, proc, mes, ano, qtd, unit, valor_total
+            // sheet format: id, paciente_id, proc, mes, ano, qtd, custo_unit, venda_unit, custo_total, venda_total, valor_glosado
             const rows = payload.procedimentos.map((p: any) => [
                 p.id || '', // can be generated by sheets formula or empty
                 p.paciente_id || '',
@@ -121,13 +124,16 @@ export default async function handler(req: any, res: any) {
                 payload.month || '',
                 payload.year || '',
                 p.qtd || 1,
-                p.unit || 0,
-                p.valor_total || 0
+                p.custo_unit || 0,
+                p.venda_unit || 0,
+                p.custo_total || 0,
+                p.venda_total || 0,
+                p.valor_glosado || 0
             ]);
 
             const response = await sheets.spreadsheets.values.append({
                 spreadsheetId,
-                range: 'Procedimentos_Realizados!A:H',
+                range: 'Procedimentos_Realizados!A:K',
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'INSERT_ROWS',
                 requestBody: { values: rows },
