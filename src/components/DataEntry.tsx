@@ -1,39 +1,49 @@
 import React, { useState } from "react"
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useDashboard } from "@/lib/DashboardDataContext"
 import { ComboboxFilter } from "@/components/ui/combobox-filter"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Loader2 } from "lucide-react"
 
 function formatCurrency(value: number) {
     return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 
 export function DataEntry() {
+    const location = useLocation()
+    const navigate = useNavigate()
+
+    // Determine the current tab from the URL
+    // URL format: /inserir/procedimento, /inserir/pacientes, /inserir/realizados
+    const segments = location.pathname.split("/")
+    const currentTab = segments[segments.length - 1] || "procedimento"
+
+    const handleTabChange = (value: string) => {
+        navigate(`/inserir/${value}`)
+    }
+
     return (
         <Card>
             <CardHeader>
                 <CardTitle className="text-xl">Inserção de Dados Base (Google Sheets)</CardTitle>
             </CardHeader>
             <CardContent>
-                <Tabs defaultValue="procedimento">
-                    <TabsList className="mb-4">
-                        <TabsTrigger value="procedimento">Gerenciar Procedimentos</TabsTrigger>
-                        <TabsTrigger value="pacientes">Gerenciar Pacientes</TabsTrigger>
-                        <TabsTrigger value="realizados">Inserir Realizados</TabsTrigger>
+                <Tabs value={currentTab} onValueChange={handleTabChange}>
+                    <TabsList className="mb-4 flex flex-nowrap overflow-x-auto no-scrollbar justify-start">
+                        <TabsTrigger value="procedimento" className="shrink-0">Gerenciar Procedimentos</TabsTrigger>
+                        <TabsTrigger value="pacientes" className="shrink-0">Gerenciar Pacientes</TabsTrigger>
+                        <TabsTrigger value="realizados" className="shrink-0">Inserir Realizados</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="procedimento">
-                        <FormProcedimento />
-                    </TabsContent>
-
-                    <TabsContent value="pacientes">
-                        <FormPacientes />
-                    </TabsContent>
-
-                    <TabsContent value="realizados">
-                        <FormRealizados />
-                    </TabsContent>
+                    <Routes>
+                        <Route path="/" element={<Navigate to="procedimento" replace />} />
+                        <Route path="procedimento" element={<FormProcedimento />} />
+                        <Route path="pacientes" element={<FormPacientes />} />
+                        <Route path="realizados" element={<FormRealizados />} />
+                        <Route path="*" element={<Navigate to="procedimento" replace />} />
+                    </Routes>
                 </Tabs>
             </CardContent>
         </Card>
@@ -41,35 +51,53 @@ export function DataEntry() {
 }
 
 function FormProcedimento() {
-    const { refProcedimentos } = useDashboard()
+    const { refProcedimentos, refreshData, loading } = useDashboard()
     const [procedimento, setProcedimento] = useState("")
     const [precoCusto, setPrecoCusto] = useState("")
     const [precoVenda, setPrecoVenda] = useState("")
     const [ativo, setAtivo] = useState(true)
     const [status, setStatus] = useState("")
     const [isEditing, setIsEditing] = useState(false)
+    const [pending, setPending] = useState<any[]>([])
 
     // Optional: Search term for the reference table
     const [searchTerm, setSearchTerm] = useState("")
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
+        if (!isEditing && pending.length === 0) return;
+
         setStatus("Salvando...")
         try {
-            const res = await fetch("/api/procedimentos", {
-                method: isEditing ? "PUT" : "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    action: isEditing ? "update_reference" : "insert_reference",
+            const body = isEditing 
+                ? {
+                    action: "update_reference",
                     payload: {
                         procedimento,
                         precoCusto: parseFloat(precoCusto.replace(",", ".")),
                         precoVenda: parseFloat(precoVenda.replace(",", ".")),
                         ativo
                     }
-                })
+                }
+                : {
+                    action: "batch_insert_reference",
+                    payload: pending.map(p => ({
+                        procedimento: p.procedimento,
+                        precoCusto: p.precoCusto,
+                        precoVenda: p.precoVenda,
+                        ativo: p.ativo
+                    }))
+                };
+
+            const res = await fetch("/api/procedimentos", {
+                method: isEditing ? "PUT" : "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
             })
             if (!res.ok) throw new Error(await res.text())
+            setStatus("Processando...")
+            await new Promise(r => setTimeout(r, 1500)) // Aguarda propagação do Google Sheets
+            await refreshData()
             setStatus("Salvo com sucesso!")
             // Reset form
             setProcedimento("")
@@ -77,9 +105,34 @@ function FormProcedimento() {
             setPrecoVenda("")
             setAtivo(true)
             setIsEditing(false)
+            setPending([])
         } catch (err: any) {
             setStatus("Erro: " + err.message)
         }
+    }
+
+    function handleAdd() {
+        if (!procedimento || precoCusto === "" || precoVenda === "") return;
+        
+        const newProc = {
+            procedimento,
+            precoCusto: parseFloat(precoCusto.replace(",", ".")),
+            precoVenda: parseFloat(precoVenda.replace(",", ".")),
+            ativo
+        };
+        
+        setPending([...pending, newProc]);
+        
+        // Reset form for next item
+        setProcedimento("");
+        setPrecoCusto("");
+        setPrecoVenda("");
+        setAtivo(true);
+        setStatus("");
+    }
+
+    function handleRemovePending(index: number) {
+        setPending(pending.filter((_, i) => i !== index));
     }
 
     function handleEdit(proc: any) {
@@ -105,7 +158,7 @@ function FormProcedimento() {
 
     return (
         <div className="space-y-8">
-            <form onSubmit={handleSubmit} className="space-y-4 max-w-md p-4 border rounded-lg bg-muted/20">
+            <form onSubmit={handleSubmit} className="space-y-4 w-full lg:max-w-xl p-4 border rounded-lg bg-muted/20">
                 <h3 className="font-semibold text-lg">{isEditing ? "Editar Procedimento" : "Novo Procedimento"}</h3>
                 <div>
                     <label className="block text-sm font-medium mb-1">Nome do Procedimento</label>
@@ -119,8 +172,8 @@ function FormProcedimento() {
                     />
                     {isEditing && <p className="text-xs text-muted-foreground mt-1">O nome do procedimento não pode ser alterado na edição.</p>}
                 </div>
-                <div className="flex gap-4">
-                    <div className="flex-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
                         <label className="block text-sm font-medium mb-1">Preço Custo (R$)</label>
                         <input
                             required
@@ -132,7 +185,7 @@ function FormProcedimento() {
                             placeholder="Ex: 100.00"
                         />
                     </div>
-                    <div className="flex-1">
+                    <div>
                         <label className="block text-sm font-medium mb-1">Preço Venda (R$)</label>
                         <input
                             required
@@ -155,58 +208,122 @@ function FormProcedimento() {
                     />
                     <label htmlFor="proc-ativo" className="text-sm font-medium">Procedimento Ativo</label>
                 </div>
-                <div className="flex gap-2">
-                    <button type="submit" className="h-10 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-                        {isEditing ? "Salvar Alterações" : "Salvar Novo Valor"}
-                    </button>
+                <div className="flex flex-col sm:flex-row gap-2">
+                    {isEditing ? (
+                        <button type="submit" disabled={loading || status === "Salvando..." || status === "Processando..."} className="h-10 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2 w-full sm:w-auto">
+                            {(status === "Salvando..." || status === "Processando...") && <Loader2 className="h-4 w-4 animate-spin" />}
+                            Salvar Alterações
+                        </button>
+                    ) : (
+                        <button type="button" onClick={handleAdd} disabled={!procedimento || precoCusto === "" || precoVenda === ""} className="h-10 px-4 py-2 bg-slate-900 text-white rounded-md hover:bg-slate-800 disabled:opacity-50 w-full sm:w-auto">
+                            Adicionar à Fila
+                        </button>
+                    )}
                     {isEditing && (
-                        <button type="button" onClick={handleCancelEdit} className="h-10 px-4 py-2 bg-slate-200 text-slate-800 rounded-md hover:bg-slate-300">
+                        <button type="button" onClick={handleCancelEdit} className="h-10 px-4 py-2 bg-slate-200 text-slate-800 rounded-md hover:bg-slate-300 w-full sm:w-auto">
                             Cancelar
                         </button>
                     )}
                 </div>
-                {status && <p className="text-sm mt-2 text-blue-600 font-medium">{status}</p>}
+                {isEditing && status && (
+                    <p className={`text-sm mt-2 font-medium ${status.startsWith("Erro:") ? "text-red-600" : "text-blue-600"}`}>
+                        {status}
+                    </p>
+                )}
+                {!isEditing && status && <p className="text-sm mt-2 text-blue-600 font-medium">{status}</p>}
             </form>
 
+            {!isEditing && pending.length > 0 && (
+                <Card className="shadow-none border">
+                    <div className="table-container">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="whitespace-nowrap">Procedimento</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Custo</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Venda</TableHead>
+                                    <TableHead className="whitespace-nowrap">Status</TableHead>
+                                    <TableHead className="w-[80px]"></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {pending.map((p, i) => (
+                                    <TableRow key={i}>
+                                        <TableCell className="font-medium text-xs whitespace-nowrap">{p.procedimento}</TableCell>
+                                        <TableCell className="text-right text-xs whitespace-nowrap">{formatCurrency(p.precoCusto)}</TableCell>
+                                        <TableCell className="text-right text-xs whitespace-nowrap">{formatCurrency(p.precoVenda)}</TableCell>
+                                        <TableCell className="text-xs whitespace-nowrap">
+                                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${p.ativo ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                                                {p.ativo ? "Ativo" : "Inativo"}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell>
+                                            <button onClick={() => handleRemovePending(i)} className="text-red-500 hover:text-red-700 text-xs whitespace-nowrap">Remover</button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                    <CardFooter className="pt-4 border-t flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <span className="text-sm text-muted-foreground">{pending.length} procedimento(s) na fila.</span>
+                        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                            {status && <span className="text-sm text-blue-600 font-medium">{status}</span>}
+                            <button onClick={handleSubmit} disabled={loading || status === "Salvando..." || status === "Processando..."} className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition-colors flex items-center justify-center gap-2 w-full sm:w-auto">
+                                {(status === "Salvando..." || status === "Processando...") && <Loader2 className="h-4 w-4 animate-spin" />}
+                                Salvar Lote
+                            </button>
+                        </div>
+                    </CardFooter>
+                </Card>
+            )}
+
             <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-lg">Procedimentos Cadastrados</h3>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <h3 className="font-semibold text-lg shrink-0">Procedimentos Cadastrados</h3>
                     <input
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                         placeholder="Buscar procedimento..."
-                        className="h-9 px-3 border rounded-md text-sm"
+                        className="h-9 px-3 border rounded-md text-sm w-full sm:w-64"
                     />
                 </div>
-                <div className="border rounded-md max-h-[400px] overflow-auto">
-                    <Table>
-                        <TableHeader className="sticky top-0 bg-background z-10">
-                            <TableRow>
-                                <TableHead>Procedimento</TableHead>
-                                <TableHead className="text-right">Custo</TableHead>
-                                <TableHead className="text-right">Venda</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="w-[80px] text-right">Ação</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredProcedures.map((proc, i) => (
-                                <TableRow key={i}>
-                                    <TableCell className="font-medium text-sm">{proc.procedimento}</TableCell>
-                                    <TableCell className="text-right text-sm">{formatCurrency(proc.precoCusto || 0)}</TableCell>
-                                    <TableCell className="text-right text-sm">{formatCurrency(proc.precoVenda || 0)}</TableCell>
-                                    <TableCell className="text-sm">
-                                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${proc.ativo ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
-                                            {proc.ativo ? "Ativo" : "Inativo"}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <button onClick={() => handleEdit(proc)} className="text-blue-600 hover:text-blue-800 text-sm font-medium">Editar</button>
-                                    </TableCell>
+                <div className="border rounded-md max-h-[400px] overflow-auto relative">
+                    {loading && (
+                        <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-20 flex items-center justify-center">
+                            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                        </div>
+                    )}
+                    <div className="table-container mb-0">
+                        <Table>
+                            <TableHeader className="sticky top-0 bg-background z-10">
+                                <TableRow>
+                                    <TableHead className="whitespace-nowrap">Procedimento</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Custo</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Venda</TableHead>
+                                    <TableHead className="whitespace-nowrap">Status</TableHead>
+                                    <TableHead className="w-[80px] text-right whitespace-nowrap">Ação</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredProcedures.map((proc, i) => (
+                                    <TableRow key={i}>
+                                        <TableCell className="font-medium text-sm whitespace-nowrap">{proc.procedimento}</TableCell>
+                                        <TableCell className="text-right text-sm whitespace-nowrap">{formatCurrency(proc.precoCusto || 0)}</TableCell>
+                                        <TableCell className="text-right text-sm whitespace-nowrap">{formatCurrency(proc.precoVenda || 0)}</TableCell>
+                                        <TableCell className="text-sm whitespace-nowrap">
+                                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${proc.ativo ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                                                {proc.ativo ? "Ativo" : "Inativo"}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <button onClick={() => handleEdit(proc)} className="text-blue-600 hover:text-blue-800 text-sm font-medium whitespace-nowrap">Editar</button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -214,7 +331,7 @@ function FormProcedimento() {
 }
 
 function FormPacientes() {
-    const { distribuicaoMunicipio, valorOperadora, tipoAcomodacao, statusPacienteConfig, pacientes } = useDashboard()
+    const { distribuicaoMunicipio, valorOperadora, tipoAcomodacao, statusPacienteConfig, pacientes, refreshData, loading } = useDashboard()
     const [patients, setPatients] = useState<any[]>([])
 
     // Combobox Options
@@ -323,6 +440,9 @@ function FormPacientes() {
                 body: JSON.stringify({ action: "update", patient: patientData })
             })
             if (!res.ok) throw new Error(await res.text())
+            setApiStatus("Processando...")
+            await new Promise(r => setTimeout(r, 1500))
+            await refreshData()
             setApiStatus("Atualizado com sucesso!")
             resetForm()
         } catch (err: any) {
@@ -341,6 +461,9 @@ function FormPacientes() {
                 body: JSON.stringify({ patients })
             })
             if (!res.ok) throw new Error(await res.text())
+            setApiStatus("Processando...")
+            await new Promise(r => setTimeout(r, 1500))
+            await refreshData()
             setApiStatus("Inseridos com sucesso!")
             setPatients([])
         } catch (err: any) {
@@ -430,7 +553,8 @@ function FormPacientes() {
                     </div>
                     <div className="flex items-end">
                         {isEditing ? (
-                            <button onClick={handleUpdateExisting} disabled={!nome || !municipio || !operadora || !acomodacao || !statusPaciente} className="h-10 px-4 w-full bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                            <button onClick={handleUpdateExisting} disabled={loading || apiStatus === "Atualizando..." || apiStatus === "Processando..." || !nome || !municipio || !operadora || !acomodacao || !statusPaciente} className="h-10 px-4 w-full bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+                                {(apiStatus === "Atualizando..." || apiStatus === "Processando...") && <Loader2 className="h-4 w-4 animate-spin" />}
                                 Salvar Alterações
                             </button>
                         ) : (
@@ -444,37 +568,40 @@ function FormPacientes() {
 
             {!isEditing && patients.length > 0 && (
                 <Card className="shadow-none border">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Nome</TableHead>
-                                <TableHead>Município</TableHead>
-                                <TableHead>Sexo</TableHead>
-                                <TableHead>Operadora</TableHead>
-                                <TableHead>Acomodação</TableHead>
-                                <TableHead className="w-[80px]"></TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {patients.map((p, i) => (
-                                <TableRow key={i}>
-                                    <TableCell className="font-medium text-xs">{p.nome}</TableCell>
-                                    <TableCell className="text-xs">{p.municipio}</TableCell>
-                                    <TableCell className="text-xs">{p.sexo}</TableCell>
-                                    <TableCell className="text-xs">{p.operadora}</TableCell>
-                                    <TableCell className="text-xs">{p.acomodacao} - {p.status}</TableCell>
-                                    <TableCell>
-                                        <button onClick={() => handleRemove(i)} className="text-red-500 hover:text-red-700 text-xs">Remover</button>
-                                    </TableCell>
+                    <div className="table-container">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="whitespace-nowrap">Nome</TableHead>
+                                    <TableHead className="whitespace-nowrap">Município</TableHead>
+                                    <TableHead className="whitespace-nowrap">Sexo</TableHead>
+                                    <TableHead className="whitespace-nowrap">Operadora</TableHead>
+                                    <TableHead className="whitespace-nowrap">Acomodação</TableHead>
+                                    <TableHead className="w-[80px]"></TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                    <CardFooter className="pt-4 border-t flex justify-between items-center">
+                            </TableHeader>
+                            <TableBody>
+                                {patients.map((p, i) => (
+                                    <TableRow key={i}>
+                                        <TableCell className="font-medium text-xs whitespace-nowrap">{p.nome}</TableCell>
+                                        <TableCell className="text-xs whitespace-nowrap">{p.municipio}</TableCell>
+                                        <TableCell className="text-xs whitespace-nowrap">{p.sexo}</TableCell>
+                                        <TableCell className="text-xs whitespace-nowrap">{p.operadora}</TableCell>
+                                        <TableCell className="text-xs whitespace-nowrap">{p.acomodacao} - {p.status}</TableCell>
+                                        <TableCell>
+                                            <button onClick={() => handleRemove(i)} className="text-red-500 hover:text-red-700 text-xs whitespace-nowrap">Remover</button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                    <CardFooter className="pt-4 border-t flex flex-col sm:flex-row justify-between items-center gap-4">
                         <span className="text-sm text-muted-foreground">{patients.length} paciente(s) prontos para inserção.</span>
-                        <div className="flex items-center gap-4">
+                        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
                             {apiStatus && <span className="text-sm text-blue-600 font-medium">{apiStatus}</span>}
-                            <button onClick={handleSubmit} className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition-colors">
+                            <button onClick={handleSubmit} disabled={loading || apiStatus === "Enviando..." || apiStatus === "Processando..."} className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition-colors flex items-center justify-center gap-2 w-full sm:w-auto">
+                                {(apiStatus === "Enviando..." || apiStatus === "Processando...") && <Loader2 className="h-4 w-4 animate-spin" />}
                                 Enviar Lote para PBI
                             </button>
                         </div>
@@ -493,37 +620,44 @@ function FormPacientes() {
                         className="h-9 w-64 px-3 border rounded-md text-sm"
                     />
                 </div>
-                <div className="border rounded-md max-h-[400px] overflow-auto">
-                    <Table>
-                        <TableHeader className="sticky top-0 bg-background z-10">
-                            <TableRow>
-                                <TableHead className="w-[60px]">ID</TableHead>
-                                <TableHead>Nome</TableHead>
-                                <TableHead>Operadora</TableHead>
-                                <TableHead>Município</TableHead>
-                                <TableHead>Status Base</TableHead>
-                                <TableHead className="w-[80px] text-right">Ação</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredExistingPatients.map((p: any) => (
-                                <TableRow key={p.id}>
-                                    <TableCell className="text-sm text-muted-foreground">{p.id}</TableCell>
-                                    <TableCell className="font-medium text-sm">{p.nome}</TableCell>
-                                    <TableCell className="text-sm">{p.operadora}</TableCell>
-                                    <TableCell className="text-sm">{p.municipio}</TableCell>
-                                    <TableCell className="text-sm">
-                                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${p.status === 'Alta' ? 'bg-red-100 text-red-800' : p.status === 'Ativo' ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-800'}`}>
-                                            {p.status || 'Ativo'}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <button onClick={() => handleEditExisting(p)} className="text-blue-600 hover:text-blue-800 text-sm font-medium">Editar</button>
-                                    </TableCell>
+                <div className="border rounded-md max-h-[400px] overflow-auto relative">
+                    {loading && (
+                        <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-20 flex items-center justify-center">
+                            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                        </div>
+                    )}
+                    <div className="table-container mb-0">
+                        <Table>
+                            <TableHeader className="sticky top-0 bg-background z-10">
+                                <TableRow>
+                                    <TableHead className="w-[60px] whitespace-nowrap">ID</TableHead>
+                                    <TableHead className="whitespace-nowrap">Nome</TableHead>
+                                    <TableHead className="whitespace-nowrap">Operadora</TableHead>
+                                    <TableHead className="whitespace-nowrap">Município</TableHead>
+                                    <TableHead className="whitespace-nowrap">Status Base</TableHead>
+                                    <TableHead className="w-[80px] text-right whitespace-nowrap">Ação</TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredExistingPatients.map((p: any) => (
+                                    <TableRow key={p.id}>
+                                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{p.id}</TableCell>
+                                        <TableCell className="font-medium text-sm whitespace-nowrap">{p.nome}</TableCell>
+                                        <TableCell className="text-sm whitespace-nowrap">{p.operadora}</TableCell>
+                                        <TableCell className="text-sm whitespace-nowrap">{p.municipio}</TableCell>
+                                        <TableCell className="text-sm whitespace-nowrap">
+                                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${p.status === 'Alta' ? 'bg-red-100 text-red-800' : p.status === 'Ativo' ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-800'}`}>
+                                                {p.status || 'Ativo'}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <button onClick={() => handleEditExisting(p)} className="text-blue-600 hover:text-blue-800 text-sm font-medium whitespace-nowrap">Editar</button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -531,7 +665,7 @@ function FormPacientes() {
 }
 
 function FormRealizados() {
-    const { refProcedimentos, pacientes } = useDashboard()
+    const { refProcedimentos, pacientes, refreshData, loading } = useDashboard()
 
     // Deduplicate procedures for combobox, showing latest price
     // Also track the active status so we only display active ones
@@ -630,6 +764,9 @@ function FormRealizados() {
                 })
             })
             if (!res.ok) throw new Error(await res.text())
+            setApiStatus("Processando...")
+            await new Promise(r => setTimeout(r, 1500))
+            await refreshData()
             setApiStatus("Inseridos com sucesso!")
             setPending([])
         } catch (err: any) {
@@ -680,8 +817,8 @@ function FormRealizados() {
                     <input type="number" min="1" value={qtd} onChange={e => setQtd(e.target.value)} className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" />
                 </div>
 
-                <div className="lg:col-span-5 flex justify-end">
-                    <button onClick={handleAdd} disabled={!pacienteId || !selectedProc} className="h-10 px-8 bg-slate-900 text-white rounded-md hover:bg-slate-800 disabled:opacity-50 transition-colors">
+                <div className="lg:col-span-5 flex flex-col sm:flex-row justify-end gap-2">
+                    <button onClick={handleAdd} disabled={!pacienteId || !selectedProc} className="h-10 px-8 bg-slate-900 text-white rounded-md hover:bg-slate-800 disabled:opacity-50 transition-colors w-full sm:w-auto">
                         Adicionar à Lista
                     </button>
                 </div>
@@ -689,41 +826,44 @@ function FormRealizados() {
 
             {pending.length > 0 && (
                 <Card className="shadow-none border">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Paciente</TableHead>
-                                <TableHead>Procedimento</TableHead>
-                                <TableHead className="text-right">Qtd</TableHead>
-                                <TableHead className="text-right">Custo Unt.</TableHead>
-                                <TableHead className="text-right">Venda Unt.</TableHead>
-                                <TableHead className="text-right">Total Custo</TableHead>
-                                <TableHead className="text-right">Total Faturado</TableHead>
-                                <TableHead className="w-[80px]"></TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {pending.map((p, i) => (
-                                <TableRow key={i}>
-                                    <TableCell className="font-medium text-xs">{p.pacienteNome}</TableCell>
-                                    <TableCell className="text-xs">{p.displayProc || p.proc}</TableCell>
-                                    <TableCell className="text-right text-xs">{p.qtd}</TableCell>
-                                    <TableCell className="text-right text-xs">{formatCurrency(p.custo_unitPreview)}</TableCell>
-                                    <TableCell className="text-right text-xs">{formatCurrency(p.venda_unitPreview)}</TableCell>
-                                    <TableCell className="text-right font-medium text-xs text-red-600">{formatCurrency(p.custo_totalPreview)}</TableCell>
-                                    <TableCell className="text-right font-medium text-xs text-blue-600">{formatCurrency(p.venda_totalPreview)}</TableCell>
-                                    <TableCell>
-                                        <button onClick={() => handleRemove(i)} className="text-red-500 hover:text-red-700 text-xs font-medium">Remover</button>
-                                    </TableCell>
+                    <div className="table-container">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="whitespace-nowrap">Paciente</TableHead>
+                                    <TableHead className="whitespace-nowrap">Procedimento</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Qtd</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Custo Unt.</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Venda Unt.</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Total Custo</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">Total Faturado</TableHead>
+                                    <TableHead className="w-[80px]"></TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                    <CardFooter className="pt-4 border-t flex justify-between items-center bg-muted/10">
+                            </TableHeader>
+                            <TableBody>
+                                {pending.map((p, i) => (
+                                    <TableRow key={i}>
+                                        <TableCell className="font-medium text-xs whitespace-nowrap">{p.pacienteNome}</TableCell>
+                                        <TableCell className="text-xs whitespace-nowrap">{p.displayProc || p.proc}</TableCell>
+                                        <TableCell className="text-right text-xs whitespace-nowrap">{p.qtd}</TableCell>
+                                        <TableCell className="text-right text-xs whitespace-nowrap">{formatCurrency(p.custo_unitPreview)}</TableCell>
+                                        <TableCell className="text-right text-xs whitespace-nowrap">{formatCurrency(p.venda_unitPreview)}</TableCell>
+                                        <TableCell className="text-right font-medium text-xs text-red-600 whitespace-nowrap">{formatCurrency(p.custo_totalPreview)}</TableCell>
+                                        <TableCell className="text-right font-medium text-xs text-blue-600 whitespace-nowrap">{formatCurrency(p.venda_totalPreview)}</TableCell>
+                                        <TableCell>
+                                            <button onClick={() => handleRemove(i)} className="text-red-500 hover:text-red-700 text-xs font-medium whitespace-nowrap">Remover</button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                    <CardFooter className="pt-4 border-t flex flex-col sm:flex-row justify-between items-center gap-4 bg-muted/10">
                         <span className="text-sm text-muted-foreground">{pending.length} procedimento(s) computados. O custo total do lote será calculado pela API.</span>
-                        <div className="flex items-center gap-4">
+                        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
                             {apiStatus && <span className="text-sm text-blue-600 font-medium">{apiStatus}</span>}
-                            <button onClick={handleSubmit} className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition-colors">
+                            <button onClick={handleSubmit} disabled={loading || apiStatus === "Processando e Enviando..." || apiStatus === "Processando..."} className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition-colors flex items-center justify-center gap-2 w-full sm:w-auto">
+                                {(apiStatus === "Processando e Enviando..." || apiStatus === "Processando...") && <Loader2 className="h-4 w-4 animate-spin" />}
                                 Enviar Lote Realizados
                             </button>
                         </div>

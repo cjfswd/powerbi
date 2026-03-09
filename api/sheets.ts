@@ -1,17 +1,16 @@
-// Google Sheets API v4 — read-only client
+// Google Sheets API v4 - read-only client
 // Uses batchGet to fetch all ranges in a single HTTP request.
 // Authentication: API Key (sheet must have "Anyone with link can view").
 
 const MONTHS_ORDER = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-// Static metadata that lives in code, not in the spreadsheet
 const SEXO_CORES: Record<string, string> = {
   Masculino: '#2563eb',
   Feminino: '#db2777',
 }
 
 const ACOMODACAO_META: Record<string, { label: string; cor: string }> = {
-  ID: { label: 'Internação Domiciliar', cor: '#2563eb' },
+  ID: { label: 'Internacao Domiciliar', cor: '#2563eb' },
   AD: { label: 'Atendimento Domiciliar', cor: '#7c3aed' },
 }
 
@@ -22,10 +21,6 @@ const PACOTE_CORES: Record<string, string> = {
   '24h': '#2563eb',
 }
 
-// ---------------------------------------------------------------------------
-// Low-level helpers
-// ---------------------------------------------------------------------------
-
 function num(v: unknown): number {
   const n = Number(v)
   return isNaN(n) ? 0 : n
@@ -35,387 +30,365 @@ function str(v: unknown): string {
   return v == null ? '' : String(v).trim()
 }
 
-// Skip header row (row index 0)
 function dataRows(rows: unknown[][]): unknown[][] {
-  return rows.slice(1)
+  return rows ? rows.slice(1) : []
 }
 
-// ---------------------------------------------------------------------------
-// API fetch — single batchGet call for all ranges
-// ---------------------------------------------------------------------------
+type PRColumns = {
+  id: number
+  patientId: number
+  procedure: number
+  month: number
+  year: number
+  quantity: number
+  costUnit: number
+  saleUnit: number
+  costTotal: number
+  saleTotal: number
+  glosa: number
+}
+
+const DEFAULT_PR_COLUMNS: PRColumns = {
+  id: 0,
+  patientId: 1,
+  procedure: 2,
+  month: 3,
+  year: 4,
+  quantity: 5,
+  costUnit: 6,
+  saleUnit: 7,
+  costTotal: 8,
+  saleTotal: 9,
+  glosa: 10,
+}
+
+function normalizeHeader(value: unknown): string {
+  return str(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '')
+    .toLowerCase()
+}
+
+function resolvePRColumns(rows: unknown[][]): PRColumns {
+  const header = rows?.[0]
+  if (!header || !Array.isArray(header)) {
+    return DEFAULT_PR_COLUMNS
+  }
+
+  const normalizedHeader = header.map(normalizeHeader)
+  const pick = (aliases: string[], fallback: number) => {
+    const index = normalizedHeader.findIndex((value) => aliases.includes(value))
+    return index >= 0 ? index : fallback
+  }
+
+  return {
+    id: pick(['id'], DEFAULT_PR_COLUMNS.id),
+    patientId: pick(['pacienteid', 'patientid', 'paciente'], DEFAULT_PR_COLUMNS.patientId),
+    procedure: pick(['procedimento', 'procedure', 'proc'], DEFAULT_PR_COLUMNS.procedure),
+    month: pick(['mes', 'month'], DEFAULT_PR_COLUMNS.month),
+    year: pick(['ano', 'year'], DEFAULT_PR_COLUMNS.year),
+    quantity: pick(['quantidade', 'qtd', 'quantity'], DEFAULT_PR_COLUMNS.quantity),
+    costUnit: pick(['custounitario', 'custounit', 'costunit'], DEFAULT_PR_COLUMNS.costUnit),
+    saleUnit: pick(['vendaunitaria', 'vendaunit', 'saleunit'], DEFAULT_PR_COLUMNS.saleUnit),
+    costTotal: pick(['custototal', 'costtotal'], DEFAULT_PR_COLUMNS.costTotal),
+    saleTotal: pick(['vendatotal', 'valortotal', 'saletotal'], DEFAULT_PR_COLUMNS.saleTotal),
+    glosa: pick(['valorglosado', 'glosa'], DEFAULT_PR_COLUMNS.glosa),
+  }
+}
+
+function getPRMetrics(row: unknown[], columns: PRColumns) {
+  const vendaTotal = num(row[columns.saleTotal])
+  const vendaUnit = num(row[columns.saleUnit])
+  const custoTotal = num(row[columns.costTotal])
+  const glosaTotal = num(row[columns.glosa])
+
+  const venda = vendaTotal || vendaUnit
+  const custo = custoTotal || venda * 0.6
+  const glosa = glosaTotal
+
+  return { venda, custo, glosa }
+}
+
+function monthMatchesFilter(rawMonth: string, filterMes: string): boolean {
+  if (filterMes === 'todos') return true
+
+  const monthValue = str(rawMonth)
+  if (!monthValue) return false
+
+  if (monthValue === filterMes) return true
+  if (monthValue.startsWith(`${filterMes}/`)) return true
+  if (monthValue.includes(filterMes)) return true
+
+  const maybeMonthNumber = num(monthValue.split('/')[0])
+  if (maybeMonthNumber >= 1 && maybeMonthNumber <= 12) {
+    const monthAbbrev = MONTHS_ORDER[maybeMonthNumber - 1]
+    return monthAbbrev === filterMes
+  }
+
+  return false
+}
+
+function parseRefProcedimentos(rows: unknown[][]) {
+  return dataRows(rows)
+    .filter((row) => str(row[0]) !== '')
+    .map((row) => {
+      const status = str(row[3]).toLowerCase()
+      return {
+        procedimento: str(row[0]),
+        precoCusto: num(row[1]),
+        precoVenda: num(row[2]),
+        ativo: status !== 'inativo',
+        dataCriacao: str(row[4]),
+      }
+    })
+}
 
 async function batchGet(
   spreadsheetId: string,
   apiKey: string,
-  ranges: string[],
+  ranges: string[]
 ): Promise<unknown[][][]> {
-  const params = new URLSearchParams({ valueRenderOption: 'UNFORMATTED_VALUE', key: apiKey })
-  ranges.forEach(r => params.append('ranges', r))
+  const params = new URLSearchParams()
+  params.set('valueRenderOption', 'UNFORMATTED_VALUE')
+  params.set('key', apiKey)
+  ranges.forEach((range) => params.append('ranges', range))
 
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params.toString()}`
+
   const res = await fetch(url)
-
   if (!res.ok) {
     const body = await res.text().catch(() => '')
     throw new Error(`Google Sheets API ${res.status}: ${body}`)
   }
 
   const json = (await res.json()) as { valueRanges: Array<{ values?: unknown[][] }> }
-  return json.valueRanges.map(vr => vr.values ?? [])
+  return json.valueRanges.map((vr) => vr.values ?? [])
 }
 
-// ---------------------------------------------------------------------------
-// Handler
-// ---------------------------------------------------------------------------
-
 export default async function handler(req: any, res: any) {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_ID;
-  const apiKey = process.env.GOOGLE_SHEETS_API_KEY;
+  const spreadsheetId = process.env.GOOGLE_SHEETS_ID
+  const apiKey = process.env.GOOGLE_SHEETS_API_KEY
 
   if (!spreadsheetId || !apiKey) {
-    return res.status(500).json({ error: 'Missing GOOGLE_SHEETS_ID or GOOGLE_SHEETS_API_KEY environment variables' });
+    return res.status(500).json({ error: 'Missing environment variables' })
   }
 
-  // Extract query param
   const urlObj = new URL(req.url || '', `http://${req.headers?.host || 'localhost'}`)
-  const isVercelLocal = !req.url?.includes('http') && req.query // fallback for varying environments
+  const isVercelLocal = !req.url?.includes('http') && req.query
+
   const queryOperadora = (isVercelLocal ? req.query?.operadora : urlObj.searchParams.get('operadora')) || 'todas'
   const filterOperadora = queryOperadora === 'todas' ? null : queryOperadora
+  const filterAno = num((isVercelLocal ? req.query?.ano : urlObj.searchParams.get('ano')) || 'todos') || null
+  const filterMes = (isVercelLocal ? req.query?.mes : urlObj.searchParams.get('mes')) || 'todos'
+  const bustCacheKey = isVercelLocal ? req.query?._t : urlObj.searchParams.get('_t')
 
   try {
-    const RANGES = [
-      'AGG_Faturamento_Mensal!A:D',   // [0] ano, mes, valor_total, qtd_realizacoes
-      'AGG_Municipios!A:D',           // [1] municipio, qtd_pacientes, valor_total, %
-      'AGG_Operadoras!A:D',           // [2] operadora, qtd_pacientes, valor_total, %
-      'AGG_Procedimentos!A:E',        // [3] procedimento, qtd, valor_total, medio, %
-      'AGG_Sexo!A:D',                 // [4] sexo, qtd_pacientes, percentual, valor_total
-      'AGG_Acomodacao!A:C',           // [5] codigo, qtd_pacientes, valor_total
-      'AGG_Pacote_Horas!A:D',         // [6] pacote, qtd_ativos, percentual, valor_total
-      'Pacientes!A:K',                // [7] id, nome, municipio, nasc, sexo, oper, acom, status, pacote, entrada, saida
-      'Procedimentos_Realizados!A:K', // [8] id, paciente_id, proc, mes, ano, qtd, custo_unit, venda_unit, custo_total, venda_total, valor_glosado
-      'REF_Procedimentos!A:G',         // [9] procedimento, preco_custo, preco_venda, status, data_insercao, data_atualizacao, valores_anteriores
-      'AGG_Faixa_Etaria!A:F',         // [10] faixa_etaria, qtd, %, desc, faturado, glosado
+    const ranges = [
+      'AGG_Faturamento_Mensal!A:D',
+      'AGG_Municipios!A:D',
+      'AGG_Operadoras!A:D',
+      'AGG_Procedimentos!A:E',
+      'AGG_Sexo!A:D',
+      'AGG_Acomodacao!A:C',
+      'AGG_Pacote_Horas!A:D',
+      'Pacientes!A:K',
+      'Procedimentos_Realizados!A:K',
+      'REF_Procedimentos!A:G',
+      'AGG_Faixa_Etaria!A:F',
     ]
 
+    const valueRanges = await batchGet(spreadsheetId, apiKey, ranges)
     const [
-      rawFaturamento,
-      rawMunicipios,
+      _rawFaturamento,
+      _rawMunicipios,
       rawOperadoras,
-      rawProcedimentos,
-      rawSexo,
-      rawAcomodacao,
-      rawPacoteHoras,
+      _rawProcedimentos,
+      _rawSexo,
+      _rawAcomodacao,
+      _rawPacoteHoras,
       rawPacientes,
       rawPR,
       rawRefProcedimentos,
-      rawFaixaEtaria,
-    ] = await batchGet(spreadsheetId, apiKey, RANGES)
+      _rawFaixaEtaria,
+    ] = valueRanges
 
-    // --- AGG_Faturamento_Mensal → { mes, valor } ----------------------------
-    const fatRows = dataRows(rawFaturamento).filter(r => r[0] && r[1])
-    const multiYear = new Set(fatRows.map(r => str(r[0]))).size > 1
+    const prColumns = resolvePRColumns(rawPR)
 
-    let faturamentoMensal = fatRows
-      .map(r => ({ ano: num(r[0]), mesStr: str(r[1]), valor: num(r[2]) }))
-      .sort((a, b) => {
-        if (a.ano !== b.ano) return a.ano - b.ano
-        return MONTHS_ORDER.indexOf(a.mesStr) - MONTHS_ORDER.indexOf(b.mesStr)
-      })
-      .map(({ ano, mesStr, valor }) => ({
-        mes: multiYear ? `${mesStr}/${String(ano).slice(2)}` : mesStr,
-        valor,
-      }))
+    // Keep rows with patient + procedure even if the sheet id is still empty/formula-driven.
+    let prBase = dataRows(rawPR).filter(
+      (row) => num(row[prColumns.patientId]) > 0 && str(row[prColumns.procedure]) !== ''
+    )
 
-    // --- AGG_Municipios → { municipio, valor } --------------------------------
-    let distribuicaoMunicipio = dataRows(rawMunicipios)
-      .filter(r => r[0])
-      .map(r => ({ municipio: str(r[0]), valor: num(r[2]) }))
-      .sort((a, b) => b.valor - a.valor)
-
-    let valorOperadora = dataRows(rawOperadoras)
-      .filter(r => r[0])
-      .map(r => ({ operadora: str(r[0]), valor: num(r[2]) }))
-      .sort((a, b) => b.valor - a.valor)
-
-    const todasOperadoras = valorOperadora.map(o => o.operadora)
-
-    // --- AGG_Procedimentos → { procedimento, valor } -------------------------
-    let tipoProcedimento = dataRows(rawProcedimentos)
-      .filter(r => r[0])
-      .map(r => ({ procedimento: str(r[0]), valor: num(r[2]) }))
-      .sort((a, b) => b.valor - a.valor)
-
-    // --- AGG_Sexo → { sexo, percentual, cor } ---------------------------------
-    let perfilSexo = dataRows(rawSexo)
-      .filter(r => r[0])
-      .map(r => ({
-        sexo: str(r[0]),
-        percentual: num(r[2]),
-        cor: SEXO_CORES[str(r[0])] ?? '#6366f1',
-      }))
-
-    // --- AGG_Acomodacao → { tipo, label, valor, cor } -------------------------
-    let tipoAcomodacao = dataRows(rawAcomodacao)
-      .filter(r => r[0])
-      .map(r => {
-        const tipo = str(r[0])
-        const meta = ACOMODACAO_META[tipo] ?? { label: tipo, cor: '#6366f1' }
-        return { tipo, label: meta.label, valor: num(r[2]), cor: meta.cor }
-      })
-
-    // --- AGG_Pacote_Horas → distribuicaoAssistencia { tipo, valor, cor } -----
-    // Maps the care-package breakdown (3h/6h/12h/24h) to the "Tipo de Assistência" chart
-    let distribuicaoAssistencia = dataRows(rawPacoteHoras)
-      .filter(r => r[0])
-      .map(r => ({
-        tipo: str(r[0]),
-        valor: num(r[3]), // valor_total is column D (index 3)
-        cor: PACOTE_CORES[str(r[0])] ?? '#6366f1',
-      }))
-
-    // --- AGG_Faixa_Etaria → { faixa, descricao, qtd, percentual, valorFaturado, valorGlosado }
-    let faixaEtaria = dataRows(rawFaixaEtaria)
-      .filter(r => r[0] && str(r[0]).toLowerCase() !== 'total_ativos')
-      .map(r => ({
-        faixa: str(r[0]),
-        qtd: num(r[1]),
-        percentual: num(str(r[2]).replace('%', '')),
-        descricao: str(r[3]),
-        valorFaturado: num(r[4]),
-        valorGlosado: num(r[5]),
-      }))
-
-    // ------------------------------------------------------------------------
-    // Filter Raw Data based on `filterOperadora`
-    // ------------------------------------------------------------------------
-
-    // Original Pacientes: [0] id, [1] nome, [2] municipio, [3] nasc, [4] sexo, [5] oper, [6] acom, [7] status, [8] pacote, [9] entrada, [10] saida
-    let pacientesBase = dataRows(rawPacientes).filter(r => r[0] && str(r[1]))
+    let patientsRaw = dataRows(rawPacientes).filter((row) => row[0] && str(row[1]) !== '')
     if (filterOperadora) {
-      pacientesBase = pacientesBase.filter(r => str(r[5]) === filterOperadora)
+      patientsRaw = patientsRaw.filter((row) => str(row[5]) === filterOperadora)
     }
 
-    const validPatientIds = new Set(pacientesBase.map(r => num(r[0])))
+    const validPatientIds = new Set(patientsRaw.map((row) => num(row[0])))
 
-    // Original PR: [0] id, [1] paciente_id, [2] proc, [3] mes, [4] ano, [5] qtd, [6] custo_unit, [7] venda_unit, [8] custo_total, [9] venda_total, [10] valor_glosado
-    let prBase = dataRows(rawPR).filter(r => r[0])
     if (filterOperadora) {
-      prBase = prBase.filter(r => validPatientIds.has(num(r[1])))
+      prBase = prBase.filter((row) => validPatientIds.has(num(row[prColumns.patientId])))
     }
 
-    // --- Procedimentos_Realizados → custo por paciente -----------------------
-    const custoPorPaciente: Record<number, number> = {}
+    if (filterAno) {
+      prBase = prBase.filter((row) => num(row[prColumns.year]) === filterAno)
+    }
+
+    if (filterMes !== 'todos') {
+      prBase = prBase.filter((row) => monthMatchesFilter(str(row[prColumns.month]), filterMes))
+    }
+
     const vendaPorPaciente: Record<number, number> = {}
+    const custoPorPaciente: Record<number, number> = {}
     const glosaPorPaciente: Record<number, number> = {}
-    prBase.forEach(r => {
-      const pid = num(r[1])
-      const custoTotalVal = num(r[8])
-      const vendaTotalVal = num(r[9])
-      const glosa = num(r[10])
+
+    let totalVendaCalc = 0
+    let totalCustoCalc = 0
+    let totalGlosaCalc = 0
+
+    prBase.forEach((row) => {
+      const pid = num(row[prColumns.patientId])
+      const { venda, custo, glosa } = getPRMetrics(row, prColumns)
+
+      totalVendaCalc += venda
+      totalCustoCalc += custo
+      totalGlosaCalc += glosa
+
       if (pid > 0) {
-        custoPorPaciente[pid] = (custoPorPaciente[pid] ?? 0) + custoTotalVal
-        vendaPorPaciente[pid] = (vendaPorPaciente[pid] ?? 0) + vendaTotalVal
+        vendaPorPaciente[pid] = (vendaPorPaciente[pid] ?? 0) + venda
+        custoPorPaciente[pid] = (custoPorPaciente[pid] ?? 0) + custo
         glosaPorPaciente[pid] = (glosaPorPaciente[pid] ?? 0) + glosa
       }
     })
 
-    // --- Pacientes → patient list ---------------------------------------------
-    const pacientes = pacientesBase
-      .map(r => ({
-        id: num(r[0]),
-        nome: str(r[1]),
-        municipio: str(r[2]),
-        status: str(r[7]),
-        custo: vendaPorPaciente[num(r[0])] ?? 0, // mantido 'custo' para fallback anterior, mas agora representa a 'venda' real para os gráficos baseados nisso
-        custoReal: custoPorPaciente[num(r[0])] ?? 0,
-        operadora: str(r[5]),
-        acomodacao: str(r[6]),
-      }))
-
-    // --- REF_Procedimentos → reference pricing list --------------------
-    // Schema: procedimento | preco_custo | preco_venda | status | data_insercao | data_atualizacao | valores_anteriores
-    const refProcedimentos = dataRows(rawRefProcedimentos)
-      .filter(r => r[0])
-      .map(r => ({
-        procedimento: str(r[0]),
-        precoCusto: num(r[1]),
-        precoVenda: num(r[2]),
-        ativo: str(r[3]).toLowerCase() !== 'inativo',
-        status: str(r[3]) || 'Ativo',
-        dataInsercao: str(r[4]),
-        dataAtualizacao: str(r[5]),
-        valoresAnteriores: str(r[6]),
-      }))
-
-    // --- KPIs (derived from AGG data or dynamic if filtered) ------------------
-    let valorTotalPago = 0
-    let custoTotal = 0
-    let mediaMensalPaga = 0
-    let pacientesDistintos = pacientes.length
-    let custoMedioPaciente = 0
-
-    if (filterOperadora) {
-      // DYNAMIC RECOMPUTATION 
-      // 1. Faturamento Mensal
-      const mesMap = new Map<string, number>()
-      let totalVal = 0
-      let totalCusto = 0
-      prBase.forEach(r => {
-        const mes = str(r[3])
-        const ano = num(r[4])
-        const custoTotalVal = num(r[8])
-        const vendaTotalVal = num(r[9])
-        if (!mes || !ano) return
-        const key = multiYear ? `${mes}/${String(ano).slice(2)}` : mes
-        mesMap.set(key, (mesMap.get(key) || 0) + vendaTotalVal)
-        totalVal += vendaTotalVal
-        totalCusto += custoTotalVal
-      })
-
-      faturamentoMensal = Array.from(mesMap.entries()).map(([mes, valor]) => ({ mes, valor }))
-      // sort logic omitted for brevity as PRs might already be sorted or dashboard handles it loosely
-      if (faturamentoMensal.length > 0 && !multiYear) {
-        faturamentoMensal.sort((a, b) => MONTHS_ORDER.indexOf(a.mes) - MONTHS_ORDER.indexOf(b.mes))
-      } else {
-        // Basic sort for mm/yy
-        faturamentoMensal.sort((a, b) => {
-          const [ma, ya] = a.mes.split('/')
-          const [mb, yb] = b.mes.split('/')
-          if (ya !== yb) return num(ya) - num(yb)
-          return MONTHS_ORDER.indexOf(ma) - MONTHS_ORDER.indexOf(mb)
-        })
+    const pacientes = patientsRaw.map((row) => {
+      const id = num(row[0])
+      return {
+        id,
+        nome: str(row[1]),
+        municipio: str(row[2]),
+        status: str(row[7]),
+        custo: vendaPorPaciente[id] ?? 0,
+        custoReal: custoPorPaciente[id] ?? 0,
+        operadora: str(row[5]),
+        acomodacao: str(row[6]),
       }
+    })
 
-      // 2. Municipios
-      const munMap = new Map<string, number>()
-      pacientes.forEach(p => munMap.set(p.municipio, (munMap.get(p.municipio) || 0) + p.custo))
-      distribuicaoMunicipio = Array.from(munMap.entries())
-        .map(([municipio, valor]) => ({ municipio, valor }))
-        .sort((a, b) => b.valor - a.valor)
+    const mesMap = new Map<string, { valor: number; custo: number }>()
+    prBase.forEach((row) => {
+      const mesRaw = str(row[prColumns.month])
+      const ano = num(row[prColumns.year])
+      const { venda, custo } = getPRMetrics(row, prColumns)
 
-      // 3. Operadora
-      valorOperadora = [{ operadora: filterOperadora, valor: totalVal }]
+      if (!mesRaw || !ano) return
 
-      // 4. Procedimentos
-      const procMap = new Map<string, number>()
-      prBase.forEach(r => {
-        const proc = str(r[2])
-        procMap.set(proc, (procMap.get(proc) || 0) + num(r[9]))
+      const mesParts = mesRaw.split('/')
+      const mesStr = mesParts.length > 1 ? MONTHS_ORDER[num(mesParts[0]) - 1] || mesRaw : mesRaw
+      const key = `${mesStr}/${String(ano).slice(2)}`
+      const current = mesMap.get(key) || { valor: 0, custo: 0 }
+      current.valor += venda
+      current.custo += custo
+      mesMap.set(key, current)
+    })
+
+    const faturamentoMensal = Array.from(mesMap.entries())
+      .map(([mes, values]) => ({ mes, valor: values.valor, custo: values.custo }))
+      .sort((a, b) => {
+        const [mesA, anoA] = a.mes.split('/')
+        const [mesB, anoB] = b.mes.split('/')
+
+        if (anoA !== anoB) return num(anoA) - num(anoB)
+        return MONTHS_ORDER.indexOf(mesA) - MONTHS_ORDER.indexOf(mesB)
       })
-      tipoProcedimento = Array.from(procMap.entries())
-        .map(([procedimento, valor]) => ({ procedimento, valor }))
-        .sort((a, b) => b.valor - a.valor)
 
-      // 5. Sexo
-      const sexoQtd = { Masculino: 0, Feminino: 0 }
-      pacientesBase.forEach(r => {
-        const s = str(r[4])
-        if (s === 'Masculino') sexoQtd.Masculino++
-        if (s === 'Feminino') sexoQtd.Feminino++
-      })
-      const totalSexo = sexoQtd.Masculino + sexoQtd.Feminino
-      perfilSexo = []
-      if (totalSexo > 0) {
-        if (sexoQtd.Masculino > 0) perfilSexo.push({ sexo: 'Masculino', percentual: (sexoQtd.Masculino / totalSexo) * 100, cor: SEXO_CORES['Masculino'] })
-        if (sexoQtd.Feminino > 0) perfilSexo.push({ sexo: 'Feminino', percentual: (sexoQtd.Feminino / totalSexo) * 100, cor: SEXO_CORES['Feminino'] })
+    const distribuicaoAssistencia = ['3h', '6h', '12h', '24h'].map((tipo) => {
+      const pids = patientsRaw.filter((row) => str(row[8]) === tipo).map((row) => num(row[0]))
+
+      const valor = pids.reduce((sum, patientId) => sum + (vendaPorPaciente[patientId] || 0), 0)
+      const custo = pids.reduce((sum, patientId) => sum + (custoPorPaciente[patientId] || 0), 0)
+
+      return {
+        tipo,
+        valor,
+        custo,
+        cor: PACOTE_CORES[tipo] || '#6366f1',
       }
+    })
 
-      // 6. Acomodação
-      const acomMap = new Map<string, number>()
-      pacientesBase.forEach(r => {
-        const id = num(r[0])
-        const ac = str(r[6])
-        acomMap.set(ac, (acomMap.get(ac) || 0) + (vendaPorPaciente[id] || 0))
+    const procMap = new Map<string, { valor: number; custo: number }>()
+    prBase.forEach((row) => {
+      const procedimento = str(row[prColumns.procedure])
+      const { venda, custo } = getPRMetrics(row, prColumns)
+
+      const current = procMap.get(procedimento) || { valor: 0, custo: 0 }
+      current.valor += venda
+      current.custo += custo
+      procMap.set(procedimento, current)
+    })
+
+    const tipoProcedimento = Array.from(procMap.entries())
+      .map(([procedimento, values]) => ({ procedimento, valor: values.valor, custo: values.custo }))
+      .sort((a, b) => b.valor - a.valor)
+
+    const munMap = new Map<string, { valor: number; custo: number }>()
+    pacientes.forEach((patient) => {
+      const current = munMap.get(patient.municipio) || { valor: 0, custo: 0 }
+      current.valor += patient.custo
+      current.custo += patient.custoReal
+      munMap.set(patient.municipio, current)
+    })
+
+    const distribuicaoMunicipio = Array.from(munMap.entries())
+      .map(([municipio, totals]) => ({ municipio, valor: totals.valor, custo: totals.custo }))
+      .sort((a, b) => b.valor - a.valor)
+
+    const sexoQtd = { Masculino: 0, Feminino: 0 }
+    patientsRaw.forEach((row) => {
+      const sexo = str(row[4])
+      if (sexo === 'Masculino') sexoQtd.Masculino += 1
+      else if (sexo === 'Feminino') sexoQtd.Feminino += 1
+    })
+
+    const totalSexo = sexoQtd.Masculino + sexoQtd.Feminino
+    const perfilSexo = [
+      { sexo: 'Masculino', percentual: totalSexo > 0 ? (sexoQtd.Masculino / totalSexo) * 100 : 0, cor: SEXO_CORES.Masculino },
+      { sexo: 'Feminino', percentual: totalSexo > 0 ? (sexoQtd.Feminino / totalSexo) * 100 : 0, cor: SEXO_CORES.Feminino },
+    ]
+
+    const valorOperadora = Array.from(new Set(patientsRaw.map((row) => str(row[5])).filter(Boolean)))
+      .map((operadora) => {
+        const patientIds = patientsRaw
+          .filter((row) => str(row[5]) === operadora)
+          .map((row) => num(row[0]))
+
+        const valor = patientIds.reduce((sum, patientId) => sum + (vendaPorPaciente[patientId] || 0), 0)
+        const custo = patientIds.reduce((sum, patientId) => sum + (custoPorPaciente[patientId] || 0), 0)
+
+        return { operadora, valor, custo }
       })
-      tipoAcomodacao = Array.from(acomMap.entries()).map(([tipo, valor]) => {
-        const meta = ACOMODACAO_META[tipo] ?? { label: tipo, cor: '#6366f1' }
-        return { tipo, label: meta.label, valor, cor: meta.cor }
-      })
+      .sort((a, b) => b.valor - a.valor)
 
-      // 7. Assistencia (Pacote)
-      const pacoteMap = new Map<string, number>()
-      pacientesBase.forEach(r => {
-        const id = num(r[0])
-        const pac = str(r[8])
-        pacoteMap.set(pac, (pacoteMap.get(pac) || 0) + (vendaPorPaciente[id] || 0))
-      })
-      distribuicaoAssistencia = Array.from(pacoteMap.entries()).map(([tipo, valor]) => ({
-        tipo, valor, cor: PACOTE_CORES[tipo] ?? '#6366f1'
-      }))
+    const todasOperadoras = Array.from(new Set(dataRows(rawOperadoras).map((row) => str(row[0])))).filter(Boolean)
+    const todosAnosFull = Array.from(new Set(dataRows(rawPR).map((row) => num(row[prColumns.year]))))
+      .filter((ano) => ano > 0)
+      .sort((a, b) => b - a)
 
-      // 8. Faixa Etaria (Approximate based on raw records)
-      // Since we don't calculate age accurately here to match Google Sheets exactly, 
-      // we'll filter the AGG_Faixa_Etaria values by computing proportions or keep it simpler.
-      // For accurate dynamic Faixa Etaria, we need birthdate logic. Let's do a simple mapping:
-      function getFaixa(nascStr: string): string {
-        if (!nascStr) return 'S/I'
-        const parts = nascStr.split('/')
-        if (parts.length < 3) return 'S/I'
-        const year = num(parts[parts.length - 1])
-        if (year === 0) return 'S/I'
-        const age = new Date().getFullYear() - (year > 100 ? year : year + 1900) // loose estimation
-        if (age < 12) return '0-11'
-        if (age < 18) return '12-17'
-        if (age < 30) return '18-29'
-        if (age < 60) return '30-59'
-        if (age < 80) return '60-79'
-        return '80+'
-      }
-
-      const faixaMap = new Map<string, { qtd: number, valorFaturado: number }>()
-      pacientesBase.forEach(r => {
-        const id = num(r[0])
-        const nasc = str(r[3])
-        const f = getFaixa(nasc)
-        const curr = faixaMap.get(f) || { qtd: 0, valorFaturado: 0 }
-        curr.qtd++
-        curr.valorFaturado += (vendaPorPaciente[id] || 0)
-        faixaMap.set(f, curr)
-      })
-
-      const descMap: Record<string, string> = {
-        '0-11': 'Criança', '12-17': 'Adolescente', '18-29': 'Jovem Adulto',
-        '30-59': 'Adulto', '60-79': 'Idoso', '80+': 'Idoso em Idade Avançada', 'S/I': 'Sem Informação'
-      }
-
-      faixaEtaria = Array.from(faixaMap.entries()).map(([faixa, data]) => ({
-        faixa,
-        descricao: descMap[faixa] || '',
-        qtd: data.qtd,
-        percentual: totalVal > 0 ? (data.valorFaturado / totalVal) * 100 : 0,
-        valorFaturado: data.valorFaturado,
-        valorGlosado: 0 // Cannot easily map glosado dynamic here without more logic
-      }))
-
-      valorTotalPago = totalVal
-      custoTotal = totalCusto
-    } else {
-      let calcTotalCusto = 0
-      prBase.forEach(r => {
-        calcTotalCusto += num(r[8])
-      })
-      custoTotal = calcTotalCusto
-      valorTotalPago = valorOperadora.reduce((s, p) => s + p.valor, 0)
-    }
-
-    mediaMensalPaga = faturamentoMensal.length > 0
-      ? valorTotalPago / faturamentoMensal.length
-      : 0
-    custoMedioPaciente = pacientesDistintos > 0
-      ? custoTotal / pacientesDistintos
-      : 0
-
+    const pacientesDistintos = new Set(
+      prBase.map((row) => num(row[prColumns.patientId])).filter((patientId) => patientId > 0)
+    ).size
 
     const data = {
       kpis: {
-        valorTotalPago,
-        custoTotal,
-        resultadoBruto: valorTotalPago - custoTotal,
-        mediaMensalPaga,
-        valorTotalGlosado: 0,
-        mediaMensalGlosado: 0,
+        valorTotalPago: totalVendaCalc,
+        custoTotal: totalCustoCalc,
+        resultadoBruto: totalVendaCalc - totalCustoCalc,
+        mediaMensalPaga: faturamentoMensal.length > 0 ? totalVendaCalc / faturamentoMensal.length : 0,
+        valorTotalGlosado: totalGlosaCalc,
+        mediaMensalGlosado: faturamentoMensal.length > 0 ? totalGlosaCalc / faturamentoMensal.length : 0,
         pacientesDistintos,
-        custoMedioPaciente,
+        custoMedioPaciente: pacientesDistintos > 0 ? totalCustoCalc / pacientesDistintos : 0,
       },
       faturamentoMensal,
       distribuicaoAssistencia,
@@ -424,19 +397,38 @@ export default async function handler(req: any, res: any) {
       perfilSexo,
       valorOperadora,
       todasOperadoras,
-      tipoAcomodacao,
-      tipoGuia: { tipo: 'SP/SADT', valor: valorTotalPago },
-      areaPrestador: { area: 'Rio de Janeiro', valor: valorTotalPago },
-      tipoDespesa: { tipo: 'Atendimento Domiciliar', valor: valorTotalPago },
+      tipoAcomodacao: Object.entries(ACOMODACAO_META).map(([tipo, meta]) => {
+        const patientIds = patientsRaw
+          .filter((row) => str(row[6]) === tipo)
+          .map((row) => num(row[0]))
+
+        const valor = patientIds.reduce((sum, patientId) => sum + (vendaPorPaciente[patientId] || 0), 0)
+        const custo = patientIds.reduce((sum, patientId) => sum + (custoPorPaciente[patientId] || 0), 0)
+
+        return { tipo, label: meta.label, valor, custo, cor: meta.cor }
+      }),
+      tipoGuia: { tipo: 'SP/SADT', valor: totalVendaCalc, custo: totalCustoCalc },
+      areaPrestador: { area: 'Rio de Janeiro', valor: totalVendaCalc, custo: totalCustoCalc },
+      tipoDespesa: { tipo: 'Atendimento Domiciliar', valor: totalVendaCalc, custo: totalCustoCalc },
       pacientes,
-      refProcedimentos,
-      faixaEtaria,
+      refProcedimentos: parseRefProcedimentos(rawRefProcedimentos),
+      faixaEtaria: [
+        { faixa: '0-11', descricao: 'Crianca', qtd: 0, percentual: 0, valorFaturado: 0, valorCusto: 0, valorGlosado: 0 },
+        { faixa: '12-17', descricao: 'Adolescente', qtd: 0, percentual: 0, valorFaturado: 0, valorCusto: 0, valorGlosado: 0 },
+        { faixa: '18-29', descricao: 'Jovem Adulto', qtd: 0, percentual: 0, valorFaturado: 0, valorCusto: 0, valorGlosado: 0 },
+        { faixa: '30-59', descricao: 'Adulto', qtd: 0, percentual: 0, valorFaturado: 0, valorCusto: 0, valorGlosado: 0 },
+        { faixa: '60-79', descricao: 'Idoso', qtd: 0, percentual: 0, valorFaturado: 0, valorCusto: 0, valorGlosado: 0 },
+        { faixa: '80+', descricao: 'Idoso em Idade Avancada', qtd: 0, percentual: 0, valorFaturado: 0, valorCusto: 0, valorGlosado: 0 },
+      ],
+      todosAnos: todosAnosFull,
+      todosMeses: MONTHS_ORDER,
+      prBase,
     }
 
-    res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
-    return res.status(200).json(data);
+    res.setHeader('Cache-Control', bustCacheKey ? 'no-cache' : 's-maxage=30')
+    return res.status(200).json(data)
   } catch (error: any) {
-    console.error('API Error:', error);
-    return res.status(500).json({ error: error.message || 'Internal Server Error' });
+    console.error('API Error:', error)
+    return res.status(500).json({ error: error.message || 'Internal Server Error' })
   }
 }

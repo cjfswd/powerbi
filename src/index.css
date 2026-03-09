@@ -56,3 +56,250 @@ body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
 }
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Responsive Table Container */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 1rem;
+}
+
+.table-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 10px;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.3);
+}
+
+@media (max-width: 640px) {
+  .table-container {
+    margin-left: -1.5rem;
+    margin-right: -1.5rem;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    width: calc(100% + 3rem);
+  }
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 6mm;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: auto;
+    font-family: 'Inter', system-ui, sans-serif !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Reset layout for print */
+  .print-only {
+    display: block !important;
+    width: 297mm;
+    margin: 0 auto;
+    background: white !important;
+    color: #0f172a !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Dry/Textual Report Utilities */
+  .print-dry * {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    background-image: none !important;
+  }
+
+  .print-border-bold {
+    border: 2pt solid #0f172a !important;
+  }
+
+  .print-border-thin {
+    border: 0.5pt solid #cbd5e1 !important;
+  }
+
+  .print-table-header {
+    background-color: #0f172a !important;
+    color: white !important;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .print-row-alt {
+    background-color: #f8fafc !important;
+    -webkit-print-color-adjust: exact;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+
+  .print-report-page {
+    width: 100% !important;
+    max-width: none !important;
+    height: calc(210mm - 12mm) !important;
+    min-height: calc(210mm - 12mm) !important;
+    margin: 0 !important;
+    border: 0.5pt solid #e2e8f0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    break-after: page;
+    page-break-after: always;
+    overflow: hidden !important;
+  }
+
+  .print-report-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .page-break {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  /* Avoid breaking inside small reusable elements only */
+  .card, .print-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-page-body {
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .print-chart-fill,
+  .print-chart-fill > div,
+  .print-chart-fill .recharts-responsive-container {
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  .print-meta-chip {
+    background: #ffffff !important;
+    border-color: #dbe4ee !important;
+  }
+
+  .recharts-responsive-container {
+    margin-bottom: 0 !important;
+  }
+
+  .print-header {
+    display: flex !important;
+    margin-bottom: 8mm;
+    border-bottom: 2px solid #1e293b;
+    padding-bottom: 4mm;
+  }
+
+  .report-heading {
+    color: #0f172a;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+  }
+
+  .report-subheading {
+    color: #64748b;
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Force background colors for charts/cards in print */
+  .print-force-bg {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Optimize tables for print */
+  table {
+    font-size: 8.5pt !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  
+  th {
+    background-color: #f8fafc !important;
+    color: #475569 !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    font-size: 7.5pt !important;
+    border-bottom: 1.5px solid #e2e8f0 !important;
+  }
+
+  td {
+    padding: 3mm 2mm !important;
+    border-bottom: 0.5px solid #f1f5f9 !important;
+  }
+
+  .print-table-page table {
+    table-layout: fixed;
+  }
+
+  .print-table-page thead {
+    display: table-header-group !important;
+  }
+
+  .print-table-page tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-table-head th {
+    background-color: #0f172a !important;
+    color: white !important;
+    border-bottom: 1px solid #1e293b !important;
+  }
+
+  /* Adjust KPI cards for print */
+  .kpi-card-print {
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8mm !important;
+    padding: 4mm !important;
+    background: #ffffff !important;
+  }
+}
+
+@media screen {
+  .print-only {
+    display: none !important;
+  }
+
+  .print-report-page {
+    background: #ffffff !important;
+  }
+}

@@ -12,34 +12,34 @@ export const kpis = {
 }
 
 export const distribuicaoAssistencia = [
-  { tipo: "24h", valor: 2958329.38, cor: "#2563eb" },
-  { tipo: "Assistência", valor: 384198.79, cor: "#7c3aed" },
-  { tipo: "12h", valor: 250710.30, cor: "#db2777" },
-  { tipo: "Fisioterapia", valor: 154860.00, cor: "#ea580c" },
-  { tipo: "48h", valor: 65544.00, cor: "#65a30d" },
-  { tipo: "06h", valor: 25831.86, cor: "#0891b2" },
+  { tipo: "24h", valor: 2958329.38, custo: 1500000.00, cor: "#2563eb" },
+  { tipo: "Assistência", valor: 384198.79, custo: 200000.00, cor: "#7c3aed" },
+  { tipo: "12h", valor: 250710.30, custo: 120000.00, cor: "#db2777" },
+  { tipo: "Fisioterapia", valor: 154860.00, custo: 80000.00, cor: "#ea580c" },
+  { tipo: "48h", valor: 65544.00, custo: 35000.00, cor: "#65a30d" },
+  { tipo: "06h", valor: 25831.86, custo: 15000.00, cor: "#0891b2" },
 ]
 
 export const tipoProcedimento = [
-  { procedimento: "Pacote Internação", valor: 4290154.60 },
-  { procedimento: "Fisioterapia", valor: 183606.87 },
-  { procedimento: "Terapia c/ Método", valor: 65460.00 },
-  { procedimento: "Terapia Simples", valor: 50168.06 },
-  { procedimento: "Diária", valor: 28891.66 },
-  { procedimento: "Honorário Médico", valor: 18009.00 },
-  { procedimento: "Taxa", valor: 6939.60 },
-  { procedimento: "Medicamento", valor: 6068.77 },
-  { procedimento: "Material", valor: 2151.58 },
-  { procedimento: "Dieta", valor: 405.30 },
+  { procedimento: "Pacote Internação", valor: 4290154.60, custo: 2300000.00 },
+  { procedimento: "Fisioterapia", valor: 183606.87, custo: 90000.00 },
+  { procedimento: "Terapia c/ Método", valor: 65460.00, custo: 35000.00 },
+  { procedimento: "Terapia Simples", valor: 50168.06, custo: 28000.00 },
+  { procedimento: "Diária", valor: 28891.66, custo: 15000.00 },
+  { procedimento: "Honorário Médico", valor: 18009.00, custo: 10000.00 },
+  { procedimento: "Taxa", valor: 6939.60, custo: 3000.00 },
+  { procedimento: "Medicamento", valor: 6068.77, custo: 4000.00 },
+  { procedimento: "Material", valor: 2151.58, custo: 1500.00 },
+  { procedimento: "Dieta", valor: 405.30, custo: 200.00 },
 ]
 
 export const distribuicaoMunicipio = [
-  { municipio: "Nova Iguaçu", valor: 2161398.80 },
-  { municipio: "Rio de Janeiro", valor: 834502.62 },
-  { municipio: "Belford Roxo", valor: 395749.30 },
-  { municipio: "S. J. de Meriti", valor: 368919.38 },
-  { municipio: "Queimados", valor: 304963.00 },
-  { municipio: "Mesquita", valor: 264303.00 },
+  { municipio: "Nova Iguaçu", valor: 2161398.80, custo: 1100000.00 },
+  { municipio: "Rio de Janeiro", valor: 834502.62, custo: 450000.00 },
+  { municipio: "Belford Roxo", valor: 395749.30, custo: 210000.00 },
+  { municipio: "S. J. de Meriti", valor: 368919.38, custo: 195000.00 },
+  { municipio: "Queimados", valor: 304963.00, custo: 160000.00 },
+  { municipio: "Mesquita", valor: 264303.00, custo: 140000.00 },
 ]
 
 export const perfilSexo = [
@@ -48,31 +48,31 @@ export const perfilSexo = [
 ]
 
 export const valorOperadora = [
-  { operadora: "Unimed Nova Iguaçu", valor: 3108067.59 },
-  { operadora: "Camperj", valor: 1543878.05 },
+  { operadora: "Unimed Nova Iguaçu", valor: 3108067.59, custo: 1600000.00 },
+  { operadora: "Camperj", valor: 1543878.05, custo: 850000.00 },
 ]
 
 export const todasOperadoras = valorOperadora.map(o => o.operadora)
 
 export const tipoAcomodacao = [
-  { tipo: "ID", label: "Internação Domiciliar", valor: 3577064.84, cor: "#2563eb" },
-  { tipo: "AD", label: "Atendimento Domiciliar", valor: 1074880.80, cor: "#7c3aed" },
+  { tipo: "ID", label: "Internação Domiciliar", valor: 3577064.84, custo: 1900000.00, cor: "#2563eb" },
+  { tipo: "AD", label: "Atendimento Domiciliar", valor: 1074880.80, custo: 580000.00, cor: "#7c3aed" },
 ]
 
 export const faturamentoMensal = [
-  { mes: "Jan", valor: 680000 },
-  { mes: "Fev", valor: 720000 },
-  { mes: "Mar", valor: 810000 },
-  { mes: "Abr", valor: 790000 },
-  { mes: "Mai", valor: 830000 },
-  { mes: "Jun", valor: 821945.64 },
+  { mes: "Jan", valor: 680000, custo: 350000 },
+  { mes: "Fev", valor: 720000, custo: 380000 },
+  { mes: "Mar", valor: 810000, custo: 420000 },
+  { mes: "Abr", valor: 790000, custo: 410000 },
+  { mes: "Mai", valor: 830000, custo: 435000 },
+  { mes: "Jun", valor: 821945.64, custo: 425000 },
 ]
 
-export const tipoGuia = { tipo: "SP/SADT", valor: 4651945.64 }
+export const tipoGuia = { tipo: "SP/SADT", valor: 4651945.64, custo: 2500000.00 }
 
-export const areaPrestador = { area: "Rio de Janeiro", valor: 4651945.64 }
+export const areaPrestador = { area: "Rio de Janeiro", valor: 4651945.64, custo: 2500000.00 }
 
-export const tipoDespesa = { tipo: "Atendimento Domiciliar", valor: 4651945.64 }
+export const tipoDespesa = { tipo: "Atendimento Domiciliar", valor: 4651945.64, custo: 2500000.00 }
 
 // Dados de pacientes com status
 export const pacientes = [
@@ -107,11 +107,11 @@ export const refProcedimentos: { procedimento: string; dataCriacao: string; prec
 ]
 
 export const faixaEtaria = [
-  { faixa: "0-11", descricao: "Criança", qtd: 5, percentual: 4.5, valorFaturado: 150000, valorGlosado: 0 },
-  { faixa: "12-17", descricao: "Adolescente", qtd: 8, percentual: 7.3, valorFaturado: 280000, valorGlosado: 0 },
-  { faixa: "18-29", descricao: "Jovem Adulto", qtd: 12, percentual: 10.9, valorFaturado: 450000, valorGlosado: 0 },
-  { faixa: "30-59", descricao: "Adulto", qtd: 35, percentual: 31.8, valorFaturado: 1200000, valorGlosado: 0 },
-  { faixa: "60-79", descricao: "Idoso", qtd: 30, percentual: 27.3, valorFaturado: 1500000, valorGlosado: 0 },
-  { faixa: "80+", descricao: "Idoso em Idade Avançada", qtd: 20, percentual: 18.2, valorFaturado: 1071945.64, valorGlosado: 0 },
+  { faixa: "0-11", descricao: "Criança", qtd: 5, percentual: 4.5, valorFaturado: 150000, valorCusto: 75000, valorGlosado: 0 },
+  { faixa: "12-17", descricao: "Adolescente", qtd: 8, percentual: 7.3, valorFaturado: 280000, valorCusto: 140000, valorGlosado: 0 },
+  { faixa: "18-29", descricao: "Jovem Adulto", qtd: 12, percentual: 10.9, valorFaturado: 450000, valorCusto: 230000, valorGlosado: 0 },
+  { faixa: "30-59", descricao: "Adulto", qtd: 35, percentual: 31.8, valorFaturado: 1200000, valorCusto: 650000, valorGlosado: 0 },
+  { faixa: "60-79", descricao: "Idoso", qtd: 30, percentual: 27.3, valorFaturado: 1500000, valorCusto: 800000, valorGlosado: 0 },
+  { faixa: "80+", descricao: "Idoso em Idade Avançada", qtd: 20, percentual: 18.2, valorFaturado: 1071945.64, valorCusto: 550000, valorGlosado: 0 },
 ]
 

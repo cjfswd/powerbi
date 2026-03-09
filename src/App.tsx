@@ -1,4 +1,5 @@
 import React from "react"
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -8,7 +9,8 @@ import {
 } from "recharts"
 import {
   DollarSign, Users, TrendingUp, Building2, MapPin,
-  Activity, ChevronDown, ChevronUp
+  Activity, ChevronDown, ChevronUp, Loader2,
+  LayoutDashboard, ClipboardList, Map, Briefcase, BarChart2, Clock, FileText, PlusCircle, FlaskConical
 } from "lucide-react"
 
 import { useDashboard } from "@/lib/DashboardDataContext"
@@ -16,9 +18,13 @@ import { ComboboxFilter } from "@/components/ui/combobox-filter"
 import { DataEntry } from "@/components/DataEntry"
 import { AuthProvider, useAuth } from "@/lib/AuthContext"
 import { Login } from "@/components/Login"
+import ReportPrintView from "@/components/ReportPrintView"
+import { PDFExportButton } from "@/components/PDFExportButton"
+import { TestesPage } from "@/components/TestesPage"
 
 function formatCurrency(value: number) {
-  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+  const safeValue = typeof value === 'number' ? value : 0
+  return safeValue.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 
 function formatCompact(value: number) {
@@ -27,18 +33,37 @@ function formatCompact(value: number) {
   return formatCurrency(value)
 }
 
+function calculatePercent(part: number, total: number) {
+  if (!Number.isFinite(part) || !Number.isFinite(total) || total <= 0) return 0
+  return (part / total) * 100
+}
+
 const COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#65a30d", "#0891b2", "#d97706", "#6366f1", "#14b8a6", "#f43f5e"]
 
 function CustomTooltipCurrency({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
-      <p className="font-medium">{label}</p>
+      <p className="font-medium mb-2">{label}</p>
       {payload.map((entry: any, i: number) => (
-        <p key={i} style={{ color: entry.color }} className="text-sm">
-          {formatCurrency(entry.value)}
-        </p>
+        <div key={i} className="flex justify-between gap-4 text-sm items-center">
+          <span className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
+            <span className="text-muted-foreground">{entry.name}:</span>
+          </span>
+          <span className="font-bold" style={{ color: entry.color || entry.fill }}>
+            {formatCurrency(entry.value)}
+          </span>
+        </div>
       ))}
+      {payload.length === 2 && (
+        <div className="mt-2 pt-2 border-t flex justify-between gap-4 text-sm items-center">
+          <span className="text-muted-foreground italic">Resultado:</span>
+          <span className="font-bold text-green-600">
+            {formatCurrency(payload[0].value - payload[1].value)}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -130,12 +155,18 @@ function FaturamentoMensalChart() {
                 <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3} />
                 <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
               </linearGradient>
+              <linearGradient id="colorCusto" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+              </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
             <XAxis dataKey="mes" className="text-xs" />
             <YAxis tickFormatter={(v) => formatCompact(v)} className="text-xs" />
             <Tooltip content={<CustomTooltipCurrency />} />
-            <Area type="monotone" dataKey="valor" stroke="#2563eb" strokeWidth={2} fill="url(#colorFat)" />
+            <Legend verticalAlign="top" height={36}/>
+            <Area name="Venda" type="monotone" dataKey="valor" stroke="#2563eb" strokeWidth={2} fill="url(#colorFat)" />
+            <Area name="Custo" type="monotone" dataKey="custo" stroke="#ef4444" strokeWidth={2} fill="url(#colorCusto)" />
           </AreaChart>
         </ResponsiveContainer>
       </CardContent>
@@ -145,6 +176,11 @@ function FaturamentoMensalChart() {
 
 function DistribuicaoAssistenciaChart() {
   const { distribuicaoAssistencia } = useDashboard()
+  const data = distribuicaoAssistencia.map(item => ({
+    ...item,
+    valorEpsilon: item.valor === 0 ? 0.1 : item.valor
+  }))
+
   return (
     <Card>
       <CardHeader>
@@ -154,20 +190,20 @@ function DistribuicaoAssistenciaChart() {
         <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
-              data={distribuicaoAssistencia}
+              data={data}
               cx="50%"
               cy="50%"
               innerRadius={60}
               outerRadius={100}
               paddingAngle={3}
-              dataKey="valor"
+              dataKey="valorEpsilon"
               nameKey="tipo"
             >
-              {distribuicaoAssistencia.map((entry, index) => (
+              {data.map((entry, index) => (
                 <Cell key={index} fill={entry.cor} />
               ))}
             </Pie>
-            <Tooltip formatter={(value: any) => formatCurrency(value as number)} />
+            <Tooltip formatter={(_valor: any, _name: any, props: any) => [formatCurrency(props.payload.valor), 'Valor']} />
             <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
           </PieChart>
         </ResponsiveContainer>
@@ -190,11 +226,9 @@ function TipoProcedimentoChart() {
             <XAxis type="number" tickFormatter={(v) => formatCompact(v)} className="text-xs" />
             <YAxis dataKey="procedimento" type="category" width={130} className="text-xs" />
             <Tooltip content={<CustomTooltipCurrency />} />
-            <Bar dataKey="valor" radius={[0, 4, 4, 0]}>
-              {tipoProcedimento.map((_, index) => (
-                <Cell key={index} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Bar>
+            <Legend verticalAlign="top" height={36}/>
+            <Bar name="Venda" dataKey="valor" fill="#2563eb" radius={[0, 4, 4, 0]} />
+            <Bar name="Custo" dataKey="custo" fill="#ef4444" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>
@@ -216,11 +250,9 @@ function MunicipioChart() {
             <XAxis dataKey="municipio" className="text-xs" angle={-25} textAnchor="end" height={60} />
             <YAxis tickFormatter={(v) => formatCompact(v)} className="text-xs" />
             <Tooltip content={<CustomTooltipCurrency />} />
-            <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
-              {distribuicaoMunicipio.map((_, index) => (
-                <Cell key={index} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Bar>
+            <Legend verticalAlign="top" height={36}/>
+            <Bar name="Venda" dataKey="valor" fill="#2563eb" radius={[4, 4, 0, 0]} />
+            <Bar name="Custo" dataKey="custo" fill="#ef4444" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>
@@ -230,6 +262,11 @@ function MunicipioChart() {
 
 function SexoChart() {
   const { perfilSexo } = useDashboard()
+  const data = perfilSexo.map(item => ({
+    ...item,
+    percentualEpsilon: item.percentual === 0 ? 0.1 : item.percentual
+  }))
+
   return (
     <Card>
       <CardHeader>
@@ -239,20 +276,20 @@ function SexoChart() {
         <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
-              data={perfilSexo}
+              data={data}
               cx="50%"
               cy="50%"
               innerRadius={60}
               outerRadius={100}
               paddingAngle={4}
-              dataKey="percentual"
+              dataKey="percentualEpsilon"
               nameKey="sexo"
             >
-              {perfilSexo.map((entry, index) => (
+              {data.map((entry, index) => (
                 <Cell key={index} fill={entry.cor} />
               ))}
             </Pie>
-            <Tooltip formatter={(value: any) => `${value}%`} />
+            <Tooltip formatter={(_val: any, _name: any, props: any) => [`${props.payload.percentual}%`, 'Percentual']} />
             <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
           </PieChart>
         </ResponsiveContainer>
@@ -272,20 +309,25 @@ function OperadoraChart() {
       <CardContent>
         <div className="space-y-4">
           {valorOperadora.map((p, i) => {
-            const pct = ((p.valor / total) * 100).toFixed(1)
+            const pct = calculatePercent(p.valor, total)
+            const pctLabel = pct.toFixed(1)
             return (
               <div key={i} className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="font-medium truncate max-w-[200px]">{p.operadora}</span>
-                  <span className="text-muted-foreground">{pct}%</span>
+                  <span className="text-muted-foreground">{pctLabel}%</span>
                 </div>
                 <div className="h-3 rounded-full bg-muted overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all"
-                    style={{ width: `${pct}%`, backgroundColor: COLORS[i] }}
+                    style={{ width: `${Math.min(100, Math.max(0, pct))}%`, backgroundColor: COLORS[i % COLORS.length] }}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">{formatCurrency(p.valor)}</p>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-blue-600 font-medium">V: {formatCurrency(p.valor)}</span>
+                  <span className="text-red-500 font-medium">C: {formatCurrency(p.custo)}</span>
+                  <span className="text-green-600 font-bold">R: {formatCurrency(p.valor - p.custo)}</span>
+                </div>
               </div>
             )
           })}
@@ -319,11 +361,9 @@ function FaixaEtariaChart() {
             <XAxis dataKey="faixa" className="text-xs" />
             <YAxis tickFormatter={(v) => formatCompact(v)} className="text-xs" />
             <Tooltip content={<CustomTooltipCurrency />} />
-            <Bar dataKey="valorFaturado" radius={[4, 4, 0, 0]}>
-              {faixaEtaria.map((entry, index) => (
-                <Cell key={index} fill={FAIXA_CORES[entry.faixa] || COLORS[index % COLORS.length]} />
-              ))}
-            </Bar>
+            <Legend verticalAlign="top" height={36}/>
+            <Bar name="Venda" dataKey="valorFaturado" fill="#2563eb" radius={[4, 4, 0, 0]} />
+            <Bar name="Custo" dataKey="valorCusto" fill="#ef4444" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>
@@ -333,6 +373,11 @@ function FaixaEtariaChart() {
 
 function AcomodacaoChart() {
   const { tipoAcomodacao } = useDashboard()
+  const data = tipoAcomodacao.map(item => ({
+    ...item,
+    valorEpsilon: item.valor === 0 ? 0.1 : item.valor
+  }))
+
   return (
     <Card>
       <CardHeader>
@@ -342,20 +387,20 @@ function AcomodacaoChart() {
         <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
-              data={tipoAcomodacao}
+              data={data}
               cx="50%"
               cy="50%"
               innerRadius={60}
               outerRadius={100}
               paddingAngle={4}
-              dataKey="valor"
+              dataKey="valorEpsilon"
               nameKey="label"
             >
-              {tipoAcomodacao.map((entry, index) => (
+              {data.map((entry, index) => (
                 <Cell key={index} fill={entry.cor} />
               ))}
             </Pie>
-            <Tooltip formatter={(value: any) => formatCurrency(value as number)} />
+            <Tooltip formatter={(_val: any, _name: any, props: any) => [formatCurrency(props.payload.valor), 'Valor']} />
             <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
           </PieChart>
         </ResponsiveContainer>
@@ -365,51 +410,67 @@ function AcomodacaoChart() {
 }
 
 function ProcedimentoTable() {
-  const { tipoProcedimento, kpis } = useDashboard()
+  const { tipoProcedimento, kpis, loading } = useDashboard()
   return (
-    <Card>
+    <Card className="relative overflow-hidden">
+      {loading && (
+        <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-20 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      )}
       <CardHeader>
         <CardTitle className="text-base">Detalhamento por Procedimento</CardTitle>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Procedimento</TableHead>
-              <TableHead className="text-right">Valor</TableHead>
-              <TableHead className="text-right">% do Total</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {tipoProcedimento.map((p, i) => {
-              const pct = ((p.valor / kpis.valorTotalPago) * 100).toFixed(1)
-              return (
-                <TableRow key={i}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i] }} />
-                      {p.procedimento}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">{formatCurrency(p.valor)}</TableCell>
-                  <TableCell className="text-right">{pct}%</TableCell>
-                </TableRow>
-              )
-            })}
-            <TableRow className="font-bold bg-muted/50">
-              <TableCell>Total</TableCell>
-              <TableCell className="text-right">{formatCurrency(kpis.valorTotalPago)}</TableCell>
-              <TableCell className="text-right">100%</TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+        <div className="table-container">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Procedimento</TableHead>
+                <TableHead className="text-right">Custo</TableHead>
+                <TableHead className="text-right">Venda</TableHead>
+                <TableHead className="text-right">Resultado</TableHead>
+                <TableHead className="text-right">% Fat.</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tipoProcedimento.map((p, i) => {
+                const pct = calculatePercent(p.valor, kpis.valorTotalPago).toFixed(1)
+                const resultado = p.valor - p.custo
+                return (
+                  <TableRow key={i}>
+                    <TableCell className="font-medium whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                        {p.procedimento}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right text-red-600 whitespace-nowrap">{formatCurrency(p.custo)}</TableCell>
+                    <TableCell className="text-right text-blue-600 whitespace-nowrap">{formatCurrency(p.valor)}</TableCell>
+                    <TableCell className={`text-right font-bold whitespace-nowrap ${resultado >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {formatCurrency(resultado)}
+                    </TableCell>
+                    <TableCell className="text-right whitespace-nowrap">{pct}%</TableCell>
+                  </TableRow>
+                )
+              })}
+              <TableRow className="font-bold bg-muted/50">
+                <TableCell>Total</TableCell>
+                <TableCell className="text-right text-red-600">{formatCurrency(kpis.custoTotal)}</TableCell>
+                <TableCell className="text-right text-blue-600">{formatCurrency(kpis.valorTotalPago)}</TableCell>
+                <TableCell className="text-right text-green-600">{formatCurrency(kpis.resultadoBruto)}</TableCell>
+                <TableCell className="text-right">100%</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   )
 }
 
 function AtendimentoHorasChart() {
-  const { pacientes, globalOperadora } = useDashboard()
+  const { pacientes, globalOperadora, loading } = useDashboard()
   // Aggregate attendance hours from all patients with ID accommodation
   let patientsComHoras = pacientes.filter(p => (p as any).horasAtendimento)
   if (globalOperadora !== 'todas') {
@@ -438,7 +499,12 @@ function AtendimentoHorasChart() {
   const total = Object.values(horasData).reduce((a, b) => a + b, 0)
 
   return (
-    <Card>
+    <Card className="relative overflow-hidden">
+      {loading && (
+        <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-20 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      )}
       <CardHeader>
         <CardTitle className="text-base">Atendimento por Horas - Análise Geral</CardTitle>
       </CardHeader>
@@ -473,46 +539,48 @@ function AtendimentoHorasChart() {
         {/* Tabela com Detalhes por Paciente */}
         <div className="pt-6 border-t">
           <h3 className="text-sm font-medium mb-4">Detalhamento por Paciente</h3>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Paciente</TableHead>
-                <TableHead>Municipio</TableHead>
-                <TableHead>Operadora</TableHead>
-                <TableHead className="text-right">3h</TableHead>
-                <TableHead className="text-right">6h</TableHead>
-                <TableHead className="text-right">12h</TableHead>
-                <TableHead className="text-right">24h</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {patientsComHoras.map(p => {
-                const horas = (p as any).horasAtendimento || {}
-                const subtotal = Object.values(horas).reduce((a: number, b) => a + (b as number), 0)
-                return (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-medium">{p.nome}</TableCell>
-                    <TableCell className="text-sm">{p.municipio}</TableCell>
-                    <TableCell className="text-sm truncate max-w-[150px]">{p.operadora}</TableCell>
-                    <TableCell className="text-right text-sm">{formatCurrency(horas["3h"] as number || 0)}</TableCell>
-                    <TableCell className="text-right text-sm">{formatCurrency(horas["6h"] as number || 0)}</TableCell>
-                    <TableCell className="text-right text-sm">{formatCurrency(horas["12h"] as number || 0)}</TableCell>
-                    <TableCell className="text-right text-sm">{formatCurrency(horas["24h"] as number || 0)}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(subtotal)}</TableCell>
-                  </TableRow>
-                )
-              })}
-              <TableRow className="font-bold bg-muted/50">
-                <TableCell colSpan={3}>Total</TableCell>
-                <TableCell className="text-right">{formatCurrency(horasData["3h"])}</TableCell>
-                <TableCell className="text-right">{formatCurrency(horasData["6h"])}</TableCell>
-                <TableCell className="text-right">{formatCurrency(horasData["12h"])}</TableCell>
-                <TableCell className="text-right">{formatCurrency(horasData["24h"])}</TableCell>
-                <TableCell className="text-right">{formatCurrency(total)}</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+          <div className="table-container">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="whitespace-nowrap">Paciente</TableHead>
+                  <TableHead className="whitespace-nowrap">Municipio</TableHead>
+                  <TableHead className="whitespace-nowrap">Operadora</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">3h</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">6h</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">12h</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">24h</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {patientsComHoras.map(p => {
+                  const horas = (p as any).horasAtendimento || {}
+                  const subtotal = Object.values(horas).reduce((a: number, b) => a + (b as number), 0)
+                  return (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-medium whitespace-nowrap">{p.nome}</TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">{p.municipio}</TableCell>
+                      <TableCell className="text-sm truncate max-w-[150px] whitespace-nowrap">{p.operadora}</TableCell>
+                      <TableCell className="text-right text-sm whitespace-nowrap">{formatCurrency(horas["3h"] as number || 0)}</TableCell>
+                      <TableCell className="text-right text-sm whitespace-nowrap">{formatCurrency(horas["6h"] as number || 0)}</TableCell>
+                      <TableCell className="text-right text-sm whitespace-nowrap">{formatCurrency(horas["12h"] as number || 0)}</TableCell>
+                      <TableCell className="text-right text-sm whitespace-nowrap">{formatCurrency(horas["24h"] as number || 0)}</TableCell>
+                      <TableCell className="text-right font-medium whitespace-nowrap">{formatCurrency(subtotal)}</TableCell>
+                    </TableRow>
+                  )
+                })}
+                <TableRow className="font-bold bg-muted/50">
+                  <TableCell colSpan={3}>Total</TableCell>
+                  <TableCell className="text-right">{formatCurrency(horasData["3h"])}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(horasData["6h"])}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(horasData["12h"])}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(horasData["24h"])}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(total)}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -520,7 +588,7 @@ function AtendimentoHorasChart() {
 }
 
 function AnaliticoPacientes() {
-  const { pacientes, statusPacienteConfig, distribuicaoMunicipio, valorOperadora, globalOperadora } = useDashboard()
+  const { pacientes, statusPacienteConfig, distribuicaoMunicipio, valorOperadora, globalOperadora, loading } = useDashboard()
   const [municipioFilter, setMunicipioFilter] = React.useState<string>("todos")
   const [statusFilter, setStatusFilter] = React.useState<string>("todos")
   const [operadoraFilter, setOperadoraFilter] = React.useState<string>("todas")
@@ -640,83 +708,90 @@ function AnaliticoPacientes() {
       </div>
 
       {/* Tabela de Pacientes */}
-      <Card>
+      <Card className="relative overflow-hidden">
+        {loading && (
+          <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] z-20 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          </div>
+        )}
         <CardHeader>
           <CardTitle className="text-base">Detalhamento por Paciente</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-8"></TableHead>
-                <TableHead>Paciente</TableHead>
-                <TableHead>Município</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Acomodação</TableHead>
-                <TableHead>Operadora</TableHead>
-                <TableHead className="text-right">Custo</TableHead>
-                <TableHead className="text-right">Faturado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pacientesFiltrados.map(p => {
-                const config = statusPacienteConfig[p.status as keyof typeof statusPacienteConfig]
-                const isExpanded = expandedPatientId === p.id
-                const hasHours = p.acomodacao === "ID" && (p as any).horasAtendimento
-
-                return (
-                  <React.Fragment key={p.id}>
-                    <TableRow
-                      className={hasHours ? "cursor-pointer hover:bg-muted/50" : ""}
-                      onClick={() => hasHours && setExpandedPatientId(isExpanded ? null : p.id)}
-                    >
-                      <TableCell className="w-8">
-                        {hasHours && (
-                          isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                        )}
-                      </TableCell>
-                      <TableCell className="font-medium">{p.nome}</TableCell>
-                      <TableCell>{p.municipio}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">{config?.icon}</span>
-                          <span className="px-2 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: config?.cor + "20", color: config?.cor }}>
-                            {config?.label}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="px-2 py-1 rounded-md bg-muted text-xs font-medium">
-                          {p.acomodacao}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-sm truncate max-w-[180px]">{p.operadora}</TableCell>
-                      <TableCell className="text-right font-medium text-red-600">{formatCurrency(p.custoReal)}</TableCell>
-                      <TableCell className="text-right font-medium text-blue-600">{formatCurrency(p.custo)}</TableCell>
-                    </TableRow>
-
-                    {isExpanded && hasHours && (
-                      <TableRow className="bg-muted/30">
-                        <TableCell colSpan={7} className="p-4">
-                          <div className="space-y-3">
-                            <p className="font-medium text-sm">Detalhamento por Horas de Atendimento:</p>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                              {Object.entries((p as any).horasAtendimento || {}).map(([horas, valor]) => (
-                                <div key={horas} className="p-3 rounded-lg border bg-background">
-                                  <p className="text-xs text-muted-foreground mb-1">{horas}</p>
-                                  <p className="font-bold text-sm">{formatCurrency(valor as number)}</p>
-                                </div>
-                              ))}
-                            </div>
+          <div className="table-container">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8"></TableHead>
+                  <TableHead className="whitespace-nowrap">Paciente</TableHead>
+                  <TableHead className="whitespace-nowrap">Município</TableHead>
+                  <TableHead className="whitespace-nowrap">Status</TableHead>
+                  <TableHead className="whitespace-nowrap">Acomodação</TableHead>
+                  <TableHead className="whitespace-nowrap">Operadora</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Custo</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Faturado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pacientesFiltrados.map(p => {
+                  const config = statusPacienteConfig[p.status as keyof typeof statusPacienteConfig]
+                  const isExpanded = expandedPatientId === p.id
+                  const hasHours = p.acomodacao === "ID" && (p as any).horasAtendimento
+  
+                  return (
+                    <React.Fragment key={p.id}>
+                      <TableRow
+                        className={hasHours ? "cursor-pointer hover:bg-muted/50" : ""}
+                        onClick={() => hasHours && setExpandedPatientId(isExpanded ? null : p.id)}
+                      >
+                        <TableCell className="w-8">
+                          {hasHours && (
+                            isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium whitespace-nowrap">{p.nome}</TableCell>
+                        <TableCell className="whitespace-nowrap">{p.municipio}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg shrink-0">{config?.icon}</span>
+                            <span className="px-2 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: config?.cor + "20", color: config?.cor }}>
+                              {config?.label}
+                            </span>
                           </div>
                         </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className="px-2 py-1 rounded-md bg-muted text-xs font-medium">
+                            {p.acomodacao}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-sm truncate max-w-[180px] whitespace-nowrap">{p.operadora}</TableCell>
+                        <TableCell className="text-right font-medium text-red-600 whitespace-nowrap">{formatCurrency(p.custoReal)}</TableCell>
+                        <TableCell className="text-right font-medium text-blue-600 whitespace-nowrap">{formatCurrency(p.custo)}</TableCell>
                       </TableRow>
-                    )}
-                  </React.Fragment>
-                )
-              })}
-            </TableBody>
-          </Table>
+  
+                      {isExpanded && hasHours && (
+                        <TableRow className="bg-muted/30">
+                          <TableCell colSpan={8} className="p-4">
+                            <div className="space-y-3">
+                              <p className="font-medium text-sm">Detalhamento por Horas de Atendimento:</p>
+                              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                                {Object.entries((p as any).horasAtendimento || {}).map(([horas, valor]) => (
+                                  <div key={horas} className="p-3 rounded-lg border bg-background">
+                                    <p className="text-xs text-muted-foreground mb-1">{horas}</p>
+                                    <p className="font-bold text-sm">{formatCurrency(valor as number)}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -747,284 +822,469 @@ function AnaliticoPacientes() {
 }
 
 function DashboardApp() {
-  const { distribuicaoMunicipio, valorOperadora, todasOperadoras, kpis, globalOperadora, setGlobalOperadora, faixaEtaria } = useDashboard()
+  const {
+    distribuicaoMunicipio,
+    valorOperadora,
+    todasOperadoras,
+    kpis,
+    globalOperadora,
+    setGlobalOperadora,
+    globalAno,
+    setGlobalAno,
+    globalMes,
+    setGlobalMes,
+    todosAnos,
+    todosMeses,
+    faixaEtaria,
+  } = useDashboard()
   const { user, logout } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  // Map path to tab value (first segment only)
+  const segments = location.pathname.split("/").filter(Boolean)
+  const currentTab = segments[0] || "visao-geral"
+
+  const handleTabChange = (value: string) => {
+    if (value === "inserir") {
+      navigate("/inserir/procedimento")
+    } else {
+      navigate(`/${value}`)
+    }
+  }
+
+  const tabContentMap: Record<string, string> = {
+    "visao-geral": "Visão Geral",
+    "procedimentos": "Procedimentos",
+    "geografico": "Geográfico",
+    "operadoras": "Operadoras",
+    "faixa-etaria": "Faixa Etária",
+    "horas": "Atendimento Horas",
+    "analitico": "Análise Analítica",
+    "inserir": "Inserção de Dados"
+  }
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="max-w-[1400px] mx-auto flex h-16 items-center px-6">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
-              <Building2 className="h-5 w-5 text-white" />
+    <Tabs value={currentTab} onValueChange={handleTabChange} className="min-h-screen bg-muted/40 flex flex-col">
+      {/* Tier 1: Primary Header (Branding & User) */}
+      <header className="sticky top-0 z-50 w-full border-b bg-background shadow-sm">
+        <div className="max-w-[1400px] mx-auto flex h-16 items-center px-6 justify-between">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-200">
+              <Building2 className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
             <div>
-              <select
-                className="bg-transparent border-none text-sm font-bold outline-none cursor-pointer text-foreground"
-                value={globalOperadora}
-                onChange={(e) => setGlobalOperadora(e.target.value)}
-              >
-                <option value="todas">Todas Operadoras</option>
-                {todasOperadoras?.map(op => (
-                  <option key={op} value={op}>{op}</option>
-                ))}
-              </select>
-              <h1 className="text-lg font-bold leading-none"></h1>
-              <p className="text-xs text-muted-foreground">Faturamento 2025 - Atendimento Domiciliar</p>
+              <span className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground block leading-tight">Healthmais</span>
+              <span className="text-[8px] sm:text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Business Intelligence</span>
             </div>
           </div>
 
-          <div className="ml-auto flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center border font-medium text-xs">
-                {user?.substring(0, 2).toUpperCase()}
-              </div>
-              <span className="text-sm font-medium hidden sm:inline-block">{user}</span>
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col items-end hidden sm:flex">
+              <span className="text-sm font-bold text-foreground">{user}</span>
+              <button 
+                onClick={logout} 
+                className="group flex items-center gap-1 text-[10px] text-muted-foreground hover:text-red-500 transition-colors font-bold uppercase"
+              >
+                Encerrar Sessão
+              </button>
             </div>
-            <button
-              onClick={logout}
-              className="text-xs font-medium px-3 py-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Sair
-            </button>
+            <div className="h-10 w-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center border-2 border-white shadow-sm font-bold text-sm ring-1 ring-blue-100">
+              {user?.substring(0, 2).toUpperCase()}
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-[1400px] mx-auto px-6 py-6 space-y-6">
-        {/* KPIs */}
-        <KpiSection />
+      {/* Tier 2: Filter Toolbar & Context */}
+      <div className="bg-background border-b py-6 relative z-40">
+        <div className="max-w-[1400px] mx-auto px-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="flex-1">
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">{tabContentMap[currentTab] || "Dashboard"}</h2>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-600 animate-pulse shrink-0" />
+              <p className="text-xs sm:text-sm text-muted-foreground font-medium">
+                {globalAno !== 'todos' ? `Exercício ${globalAno}` : 'Dados Consolidados (2024-2025)'} 
+                {globalMes !== 'todos' ? ` - ${globalMes}` : ''}
+              </p>
+            </div>
+          </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="visao-geral">
-          <TabsList>
-            <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
-            <TabsTrigger value="procedimentos">Procedimentos</TabsTrigger>
-            <TabsTrigger value="geografico">Geográfico</TabsTrigger>
-            <TabsTrigger value="operadoras">Operadoras</TabsTrigger>
-            <TabsTrigger value="faixa-etaria">Faixa Etária</TabsTrigger>
-            <TabsTrigger value="horas">Atendimento Horas</TabsTrigger>
-            <TabsTrigger value="analitico">Analítico</TabsTrigger>
-            <TabsTrigger value="inserir">Inserir Dados</TabsTrigger>
+          <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 sm:gap-3 overflow-x-auto no-scrollbar pb-1">
+             <div className="flex items-center gap-2 pl-3 pr-2 sm:pr-4 py-1.5 bg-muted/40 rounded-xl border border-muted-foreground/10 focus-within:ring-2 ring-blue-100 transition-all w-full lg:w-auto shrink-0">
+                <Building2 className="h-4 w-4 text-blue-600 shrink-0" />
+                <select
+                  className="bg-transparent border-none text-sm font-bold outline-none cursor-pointer text-foreground flex-1 sm:min-w-[160px]"
+                  value={globalOperadora}
+                  onChange={(e) => setGlobalOperadora(e.target.value)}
+                >
+                  <option value="todas">Todas as Operadoras</option>
+                  {todasOperadoras?.map(op => (
+                    <option key={op} value={op}>{op}</option>
+                  ))}
+                </select>
+             </div>
+
+             <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-xl border border-muted-foreground/10 w-full lg:w-auto overflow-x-auto shrink-0">
+                <select
+                  className="bg-transparent border-none px-3 py-1 text-xs font-bold outline-none cursor-pointer text-muted-foreground hover:text-foreground hover:bg-white rounded-lg transition-all flex-1"
+                  value={globalAno}
+                  onChange={(e) => setGlobalAno(e.target.value)}
+                >
+                  <option value="todos">Ano: Todos</option>
+                  {todosAnos?.map(ano => (
+                    <option key={ano} value={ano.toString()}>{ano}</option>
+                  ))}
+                </select>
+                <div className="w-px h-4 bg-muted-foreground/20 shrink-0" />
+                <select
+                  className="bg-transparent border-none px-3 py-1 text-xs font-bold outline-none cursor-pointer text-muted-foreground hover:text-foreground hover:bg-white rounded-lg transition-all flex-1"
+                  value={globalMes}
+                  onChange={(e) => setGlobalMes(e.target.value)}
+                >
+                  <option value="todos">Mês: Todos</option>
+                  {todosMeses?.map(mes => (
+                    <option key={mes} value={mes}>{mes}</option>
+                  ))}
+                </select>
+             </div>
+
+             <PDFExportButton />
+          </div>
+        </div>
+      </div>
+
+      {/* Tier 3: Navigation Navbar */}
+      <div className="bg-white border-b overflow-x-auto no-scrollbar shadow-sm sticky top-16 z-30">
+        <div className="max-w-[1400px] mx-auto px-6 h-16 flex items-center">
+          <TabsList className="bg-transparent h-full p-0 flex flex-nowrap gap-2">
+            <TabsTrigger 
+              value="visao-geral" 
+              className="group relative h-10 px-4 rounded-xl data-[state=active]:bg-blue-600 data-[state=active]:text-white text-muted-foreground transition-all hover:bg-muted font-bold text-sm flex items-center gap-2"
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              Geral
+            </TabsTrigger>
+            
+            <TabsTrigger 
+              value="procedimentos" 
+              className="group relative h-10 px-4 rounded-xl data-[state=active]:bg-blue-600 data-[state=active]:text-white text-muted-foreground transition-all hover:bg-muted font-bold text-sm flex items-center gap-2"
+            >
+              <ClipboardList className="h-4 w-4" />
+              Procedimentos
+            </TabsTrigger>
+            
+            <TabsTrigger 
+              value="geografico" 
+              className="group relative h-10 px-4 rounded-xl data-[state=active]:bg-blue-600 data-[state=active]:text-white text-muted-foreground transition-all hover:bg-muted font-bold text-sm flex items-center gap-2"
+            >
+              <Map className="h-4 w-4" />
+              Geográfico
+            </TabsTrigger>
+            
+            <TabsTrigger 
+              value="operadoras" 
+              className="group relative h-10 px-4 rounded-xl data-[state=active]:bg-blue-600 data-[state=active]:text-white text-muted-foreground transition-all hover:bg-muted font-bold text-sm flex items-center gap-2"
+            >
+              <Briefcase className="h-4 w-4" />
+              Operadoras
+            </TabsTrigger>
+            
+            <TabsTrigger 
+              value="faixa-etaria" 
+              className="group relative h-10 px-4 rounded-xl data-[state=active]:bg-blue-600 data-[state=active]:text-white text-muted-foreground transition-all hover:bg-muted font-bold text-sm flex items-center gap-2"
+            >
+              <BarChart2 className="h-4 w-4" />
+              Faixa Etária
+            </TabsTrigger>
+            
+            <TabsTrigger 
+              value="horas" 
+              className="group relative h-10 px-4 rounded-xl data-[state=active]:bg-blue-600 data-[state=active]:text-white text-muted-foreground transition-all hover:bg-muted font-bold text-sm flex items-center gap-2"
+            >
+              <Clock className="h-4 w-4" />
+              Horas
+            </TabsTrigger>
+            
+            <TabsTrigger 
+              value="analitico" 
+              className="group relative h-10 px-4 rounded-xl data-[state=active]:bg-blue-600 data-[state=active]:text-white text-muted-foreground transition-all hover:bg-muted font-bold text-sm flex items-center gap-2"
+            >
+              <FileText className="h-4 w-4" />
+              Analítico
+            </TabsTrigger>
+
+            <TabsTrigger 
+              value="testes" 
+              className="group relative h-10 px-4 rounded-xl data-[state=active]:bg-blue-600 data-[state=active]:text-white text-muted-foreground transition-all hover:bg-muted font-bold text-sm flex items-center gap-2"
+            >
+              <FlaskConical className="h-4 w-4" />
+              Testes
+            </TabsTrigger>
+
+            <div className="w-px h-6 bg-muted-foreground/20 mx-2 hidden md:block" />
+
+            <TabsTrigger 
+              value="inserir" 
+              className="h-10 px-5 rounded-xl bg-muted text-muted-foreground data-[state=active]:bg-emerald-600 data-[state=active]:text-white hover:bg-muted-foreground/10 transition-all font-bold text-sm flex items-center gap-2"
+            >
+              <PlusCircle className="h-4 w-4" />
+              Inserir Dados
+            </TabsTrigger>
           </TabsList>
+        </div>
+      </div>
 
-          {/* Visao Geral */}
-          <TabsContent value="visao-geral" className="space-y-6">
-            <FaturamentoMensalChart />
+      {/* Main Content */}
+      <main className="flex-1 max-w-[1400px] w-full mx-auto px-6 py-8 space-y-8 animate-in fade-in duration-500">
+        <KpiSection />
+        
+        <div className="mt-2">
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <DistribuicaoAssistenciaChart />
-              <SexoChart />
-              <AcomodacaoChart />
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Faixa Etária (Qtd)</CardTitle>
-                </CardHeader>
-                <CardContent className="flex items-center justify-center">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={faixaEtaria}
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={2}
-                        dataKey="qtd"
-                        nameKey="faixa"
-                      >
-                        {faixaEtaria.map((entry, index) => (
-                          <Cell key={index} fill={FAIXA_CORES[entry.faixa] || COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
+          <Routes>
+            <Route path="/" element={<Navigate to="/visao-geral" replace />} />
+            
+            <Route path="/visao-geral" element={
+              <TabsContent value="visao-geral" className="space-y-6 mt-6">
+                <FaturamentoMensalChart />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <DistribuicaoAssistenciaChart />
+                  <SexoChart />
+                  <AcomodacaoChart />
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Faixa Etária (Qtd)</CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex items-center justify-center">
+                        <ResponsiveContainer width="100%" height={300}>
+                          <PieChart>
+                            <Pie
+                              data={faixaEtaria.map(f => ({ ...f, qtdEpsilon: f.qtd === 0 ? 0.1 : f.qtd }))}
+                              innerRadius={60}
+                              outerRadius={100}
+                              paddingAngle={2}
+                              dataKey="qtdEpsilon"
+                              nameKey="faixa"
+                            >
+                              {faixaEtaria.map((entry, index) => (
+                                <Cell key={index} fill={FAIXA_CORES[entry.faixa] || COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(_val: any, _name: any, props: any) => [props.payload.qtd, 'Quantidade']} />
+                            <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                </div>
+              </TabsContent>
+            } />
 
-          {/* Procedimentos */}
-          <TabsContent value="procedimentos" className="space-y-6">
-            <div className="grid gap-4 lg:grid-cols-3">
-              <TipoProcedimentoChart />
-              <DistribuicaoAssistenciaChart />
-            </div>
-            <ProcedimentoTable />
-          </TabsContent>
+            <Route path="/procedimentos" element={
+              <TabsContent value="procedimentos" className="space-y-6 mt-6">
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <TipoProcedimentoChart />
+                  <DistribuicaoAssistenciaChart />
+                </div>
+                <ProcedimentoTable />
+              </TabsContent>
+            } />
 
-          {/* Geografico */}
-          <TabsContent value="geografico" className="space-y-6">
-            <MunicipioChart />
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Detalhamento por Municipio</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Municipio</TableHead>
-                      <TableHead className="text-right">Valor Pago</TableHead>
-                      <TableHead className="text-right">% do Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {distribuicaoMunicipio.map((m, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4 text-muted-foreground" />
-                            {m.municipio}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">{formatCurrency(m.valor)}</TableCell>
-                        <TableCell className="text-right">
-                          {((m.valor / kpis.valorTotalPago) * 100).toFixed(1)}%
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
+            <Route path="/geografico" element={
+              <TabsContent value="geografico" className="space-y-6 mt-6">
+                <MunicipioChart />
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Detalhamento por Municipio</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="table-container">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="whitespace-nowrap">Municipio</TableHead>
+                            <TableHead className="text-right whitespace-nowrap">Valor Pago</TableHead>
+                            <TableHead className="text-right whitespace-nowrap">% do Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {distribuicaoMunicipio.map((m, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="font-medium whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                                  {m.municipio}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right whitespace-nowrap">{formatCurrency(m.valor)}</TableCell>
+                              <TableCell className="text-right whitespace-nowrap">
+                                {calculatePercent(m.valor, kpis.valorTotalPago).toFixed(1)}%
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            } />
 
-          {/* Operadoras */}
-          <TabsContent value="operadoras" className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <OperadoraChart />
-              <AcomodacaoChart />
-            </div>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Detalhamento por Operadora</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Operadora</TableHead>
-                      <TableHead className="text-right">Valor Pago</TableHead>
-                      <TableHead className="text-right">% do Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {valorOperadora.map((p, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">{p.operadora}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(p.valor)}</TableCell>
-                        <TableCell className="text-right">
-                          {((p.valor / kpis.valorTotalPago) * 100).toFixed(1)}%
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow className="font-bold bg-muted/50">
-                      <TableCell>Total</TableCell>
-                      <TableCell className="text-right">{formatCurrency(kpis.valorTotalPago)}</TableCell>
-                      <TableCell className="text-right">100%</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
+            <Route path="/operadoras" element={
+              <TabsContent value="operadoras" className="space-y-6 mt-6">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <OperadoraChart />
+                  <AcomodacaoChart />
+                </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Detalhamento por Operadora</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="table-container">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="whitespace-nowrap">Operadora</TableHead>
+                            <TableHead className="text-right whitespace-nowrap">Valor Pago</TableHead>
+                            <TableHead className="text-right whitespace-nowrap">% do Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {valorOperadora.map((p, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="font-medium whitespace-nowrap">{p.operadora}</TableCell>
+                              <TableCell className="text-right whitespace-nowrap">{formatCurrency(p.valor)}</TableCell>
+                              <TableCell className="text-right whitespace-nowrap">
+                                {calculatePercent(p.valor, kpis.valorTotalPago).toFixed(1)}%
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow className="font-bold bg-muted/50">
+                            <TableCell className="whitespace-nowrap">Total</TableCell>
+                            <TableCell className="text-right whitespace-nowrap">{formatCurrency(kpis.valorTotalPago)}</TableCell>
+                            <TableCell className="text-right whitespace-nowrap">100%</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            } />
 
-          {/* Faixa Etária */}
-          <TabsContent value="faixa-etaria" className="space-y-6">
-            <div className="grid gap-4 lg:grid-cols-3">
-              <FaixaEtariaChart />
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Resumo por Faixa</CardTitle>
-                </CardHeader>
-                <CardContent className="flex items-center justify-center">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={faixaEtaria}
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={4}
-                        dataKey="qtd"
-                        nameKey="faixa"
-                      >
-                        {faixaEtaria.map((entry, index) => (
-                          <Cell key={index} fill={FAIXA_CORES[entry.faixa] || COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </div>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Detalhamento por Faixa Etária</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Faixa Etária</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead className="text-right">Qtd. Pacientes</TableHead>
-                      <TableHead className="text-right">Valor Faturado</TableHead>
-                      <TableHead className="text-right">% do Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {faixaEtaria.map((f, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: FAIXA_CORES[f.faixa] }} />
-                            {f.faixa}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{f.descricao}</TableCell>
-                        <TableCell className="text-right">{f.qtd}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(f.valorFaturado)}</TableCell>
-                        <TableCell className="text-right">{f.percentual}%</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
+            <Route path="/faixa-etaria" element={
+              <TabsContent value="faixa-etaria" className="space-y-6 mt-6">
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <FaixaEtariaChart />
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Resumo por Faixa</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex items-center justify-center">
+                      <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                          <Pie
+                            data={faixaEtaria}
+                            innerRadius={60}
+                            outerRadius={100}
+                            paddingAngle={4}
+                            dataKey="qtd"
+                            nameKey="faixa"
+                          >
+                            {faixaEtaria.map((entry, index) => (
+                              <Cell key={index} fill={FAIXA_CORES[entry.faixa] || COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                          <Legend layout="horizontal" verticalAlign="bottom" align="center" iconType="square" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Detalhamento por Faixa Etária</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="table-container">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="whitespace-nowrap">Faixa Etária</TableHead>
+                            <TableHead className="whitespace-nowrap">Descrição</TableHead>
+                            <TableHead className="text-right whitespace-nowrap">Qtd. Pacientes</TableHead>
+                            <TableHead className="text-right whitespace-nowrap">Valor Faturado</TableHead>
+                            <TableHead className="text-right whitespace-nowrap">% do Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {faixaEtaria.map((f, i) => (
+                            <TableRow key={i}>
+                              <TableCell className="font-medium whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: FAIXA_CORES[f.faixa] }} />
+                                  {f.faixa}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{f.descricao}</TableCell>
+                              <TableCell className="text-right whitespace-nowrap">{f.qtd}</TableCell>
+                              <TableCell className="text-right whitespace-nowrap">{formatCurrency(f.valorFaturado)}</TableCell>
+                              <TableCell className="text-right whitespace-nowrap">{f.percentual}%</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            } />
 
-          {/* Atendimento por Horas */}
-          <TabsContent value="horas" className="space-y-6">
-            <AtendimentoHorasChart />
-          </TabsContent>
+            <Route path="/horas" element={
+              <TabsContent value="horas" className="space-y-6 mt-6">
+                <AtendimentoHorasChart />
+              </TabsContent>
+            } />
 
-          {/* Analítico */}
-          <TabsContent value="analitico" className="space-y-6">
-            <div className="grid gap-4">
-              <AnaliticoPacientes />
-            </div>
-          </TabsContent>
+            <Route path="/analitico" element={
+              <TabsContent value="analitico" className="space-y-6 mt-6">
+                <div className="grid gap-4">
+                  <AnaliticoPacientes />
+                </div>
+              </TabsContent>
+            } />
 
-          {/* Inserir Dados */}
-          <TabsContent value="inserir" className="space-y-6">
-            <DataEntry />
-          </TabsContent>
-        </Tabs>
+            <Route path="/testes" element={
+              <TabsContent value="testes" className="space-y-6 mt-6">
+                <TestesPage />
+              </TabsContent>
+            } />
+
+            <Route path="/inserir/*" element={
+              <TabsContent value="inserir" className="space-y-6 mt-6">
+                <DataEntry />
+              </TabsContent>
+            } />
+
+            <Route path="*" element={<Navigate to="/visao-geral" replace />} />
+          </Routes>
+        </div>
       </main>
 
       {/* Footer */}
-      <footer className="border-t mt-8">
-        <div className="max-w-[1400px] mx-auto px-6 py-4 flex items-center justify-between text-xs text-muted-foreground">
-          <span>Healthmais Dashboard de Power BI - Faturamento 2025</span>
-          <span>Dados referentes ao exercício 2025 - Atendimento Domiciliar</span>
+      <footer className="border-t bg-background mt-auto py-6 no-print">
+        <div className="max-w-[1400px] mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
+          <div className="flex items-center gap-4">
+             <span className="font-bold text-foreground">Healthmais Dashboard</span>
+             <span className="w-1 h-1 bg-muted-foreground/40 rounded-full" />
+             <span>Faturamento & BI v1.2</span>
+          </div>
+          <p>© 2024-2025 Atendimento Domiciliar - Todos os direitos reservados</p>
         </div>
       </footer>
-    </div>
+    </Tabs>
   )
 }
 
@@ -1051,8 +1311,13 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/print-report" element={<ReportPrintView />} />
+          <Route path="/*" element={<AppContent />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   )
 }
