@@ -6,12 +6,27 @@ type ContextValue = DashboardData & {
   statusPacienteConfig: typeof mock.statusPacienteConfig
   globalOperadora: string
   setGlobalOperadora: (val: string) => void
+  globalAno: string
+  setGlobalAno: (val: string) => void
+  globalMes: string
+  setGlobalMes: (val: string) => void
+  refreshData: () => Promise<void>
+  loading: boolean
+  error: string | null
 }
 
 const defaultValue: ContextValue = {
   ...mock,
   globalOperadora: 'todas',
   setGlobalOperadora: () => { },
+  globalAno: 'todos',
+  setGlobalAno: () => { },
+  globalMes: 'todos',
+  setGlobalMes: () => { },
+  refreshData: async () => {},
+  loading: false,
+  error: null,
+  prBase: [],
 }
 
 const DashboardDataContext = createContext<ContextValue>(defaultValue)
@@ -21,40 +36,72 @@ export function DashboardDataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [globalOperadora, setGlobalOperadora] = useState<string>('todas')
+  const [globalAno, setGlobalAno] = useState<string>('todos')
+  const [globalMes, setGlobalMes] = useState<string>('todos')
 
-  useEffect(() => {
+  const loadData = async (operadora: string, ano: string, mes: string, bustCache = false) => {
     setLoading(true)
     setError(null)
 
-    const query = globalOperadora && globalOperadora !== 'todas'
-      ? `?operadora=${encodeURIComponent(globalOperadora)}`
-      : ''
+    const params = new URLSearchParams()
+    if (operadora && operadora !== 'todas') params.set('operadora', operadora)
+    if (ano && ano !== 'todos') params.set('ano', ano)
+    if (mes && mes !== 'todos') params.set('mes', mes)
+    if (bustCache) params.set('_t', Date.now().toString())
 
-    fetch(`/api/sheets${query}`)
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.text()
-          throw new Error(body || res.statusText)
-        }
-        return res.json()
-      })
-      .then((data: DashboardData) => {
-        setValue(prev => ({
-          ...prev,
-          ...data,
-          statusPacienteConfig: mock.statusPacienteConfig
-        }))
-      })
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err)
-        setError(message)
-        console.error("Failed to load dashboard data from API:", err)
-      })
-      .finally(() => setLoading(false))
-  }, [globalOperadora])
+    const query = params.toString() ? `?${params.toString()}` : ''
+
+    try {
+      const res = await fetch(`/api/sheets${query}`)
+      if (!res.ok) {
+        const body = await res.text()
+        throw new Error(body || res.statusText)
+      }
+      const data = await res.json()
+      setValue(prev => ({
+        ...prev,
+        ...data,
+        statusPacienteConfig: mock.statusPacienteConfig
+      }))
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message)
+      console.error("Failed to load dashboard data from API:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    // Se o usuário acabou de recarregar a página logo após um CRUD
+    const lastRefreshStr = localStorage.getItem('@powerbi:lastRefresh')
+    let shouldBustCache = false
+
+    if (lastRefreshStr) {
+      const lastRefreshTime = parseInt(lastRefreshStr, 10)
+      // Tempo ajustado para cobrir o Cache-Control (s-maxage=30, stale-while-revalidate=30) = 60s sugerido. 
+      // Usaremos 60s (60000ms) como janela máxima.
+      if (Date.now() - lastRefreshTime < 60000) {  
+        shouldBustCache = true
+      }
+      localStorage.removeItem('@powerbi:lastRefresh')
+    }
+
+    loadData(globalOperadora, globalAno, globalMes, shouldBustCache)
+  }, [globalOperadora, globalAno, globalMes])
+
+  const refreshData = async () => {
+    await loadData(globalOperadora, globalAno, globalMes, true)
+  }
 
   return (
-    <DashboardDataContext.Provider value={{ ...value, globalOperadora, setGlobalOperadora }}>
+    <DashboardDataContext.Provider value={{
+      ...value,
+      globalOperadora, setGlobalOperadora,
+      globalAno, setGlobalAno,
+      globalMes, setGlobalMes,
+      refreshData, loading, error
+    }}>
       {loading && (
         <div style={{ position: 'fixed', inset: '0 0 auto 0', zIndex: 9999, padding: '8px 16px', background: '#2563eb', color: '#fff', fontSize: '0.8rem', textAlign: 'center' }}>
           Carregando dados da planilha…

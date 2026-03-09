@@ -1,4 +1,4 @@
-import { getGoogleSheetsClient } from './lib/google.js';
+import { getGoogleSheetsClient } from './lib/google.ts';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'POST' && req.method !== 'PUT') {
@@ -25,31 +25,35 @@ export default async function handler(req: any, res: any) {
             return `${y}-${m}-${d} ${h}:${mi}:${s}`;
         };
 
-        if (action === 'insert_reference') {
-            // payload: { procedimento, precoCusto, precoVenda, ativo }
-            // Schema: procedimento | preco_custo | preco_venda | status | data_insercao | data_atualizacao | valores_anteriores
-            if (!payload.procedimento || payload.precoCusto === undefined || payload.precoVenda === undefined) {
-                return res.status(400).json({ error: 'Missing procedimento, precoCusto or precoVenda' });
-            }
-
+        if (action === 'insert_reference' || action === 'batch_insert_reference') {
+            // payload: single object { procedimento, precoCusto, precoVenda, ativo }
+            // or array of such objects
+            const list = Array.isArray(payload) ? payload : [payload];
+            
             const now = formatDate(new Date());
-            const status = payload.ativo === false ? 'Inativo' : 'Ativo';
-            const row = [
-                payload.procedimento,
-                payload.precoCusto,
-                payload.precoVenda,
-                status,
-                now,   // data_insercao
-                now,   // data_atualizacao
-                '',    // valores_anteriores (empty on first insert)
-            ];
+            const rows: any[][] = [];
+            for (const item of list) {
+                if (!item.procedimento || item.precoCusto === undefined || item.precoVenda === undefined) {
+                    return res.status(400).json({ error: 'Missing procedimento, precoCusto or precoVenda' });
+                }
+                const status = item.ativo === false ? 'Inativo' : 'Ativo';
+                rows.push([
+                    item.procedimento,
+                    item.precoCusto,
+                    item.precoVenda,
+                    status,
+                    now,   // data_insercao
+                    now,   // data_atualizacao
+                    '',    // valores_anteriores
+                ]);
+            }
 
             const response = await sheets.spreadsheets.values.append({
                 spreadsheetId,
                 range: 'REF_Procedimentos!A:G',
                 valueInputOption: 'USER_ENTERED',
                 insertDataOption: 'INSERT_ROWS',
-                requestBody: { values: [row] },
+                requestBody: { values: rows },
             });
 
             return res.status(200).json({ success: true, updates: response.data.updates });
@@ -69,7 +73,10 @@ export default async function handler(req: any, res: any) {
             const rows = result.data.values || [];
 
             // Find row index (skip header at index 0)
-            const rowIndex = rows.findIndex((row: any[], i: number) => i > 0 && row[0] === payload.procedimento) + 1;
+            const rowIndex = rows.findIndex((row: any[], i: number) => {
+                if (i === 0 || !row[0]) return false;
+                return String(row[0]).trim() === String(payload.procedimento).trim();
+            }) + 1;
             if (rowIndex === 0) {
                 return res.status(404).json({ error: 'Procedimento not found' });
             }

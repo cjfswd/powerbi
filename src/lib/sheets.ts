@@ -15,16 +15,16 @@ export interface DashboardData {
     pacientesDistintos: number
     custoMedioPaciente: number
   }
-  faturamentoMensal: { mes: string; valor: number }[]
-  distribuicaoAssistencia: { tipo: string; valor: number; cor: string }[]
-  tipoProcedimento: { procedimento: string; valor: number }[]
-  distribuicaoMunicipio: { municipio: string; valor: number }[]
+  faturamentoMensal: { mes: string; valor: number; custo: number }[]
+  distribuicaoAssistencia: { tipo: string; valor: number; custo: number; cor: string }[]
+  tipoProcedimento: { procedimento: string; valor: number; custo: number }[]
+  distribuicaoMunicipio: { municipio: string; valor: number; custo: number }[]
   perfilSexo: { sexo: string; percentual: number; cor: string }[]
-  valorOperadora: { operadora: string; valor: number }[]
-  tipoAcomodacao: { tipo: string; label: string; valor: number; cor: string }[]
-  tipoGuia: { tipo: string; valor: number }
-  areaPrestador: { area: string; valor: number }
-  tipoDespesa: { tipo: string; valor: number }
+  valorOperadora: { operadora: string; valor: number; custo: number }[]
+  tipoAcomodacao: { tipo: string; label: string; valor: number; custo: number; cor: string }[]
+  tipoGuia: { tipo: string; valor: number; custo: number }
+  areaPrestador: { area: string; valor: number; custo: number }
+  tipoDespesa: { tipo: string; valor: number; custo: number }
   todasOperadoras: string[]
   pacientes: {
     id: number
@@ -44,6 +44,10 @@ export interface DashboardData {
     qtd: number
     percentual: number
     valorFaturado: number
+    valorCusto: number
     valorGlosado: number
   }[]
+  todosAnos?: number[]
+  todosMeses?: string[]
+  prBase: any[][]
 }

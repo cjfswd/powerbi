@@ -11,7 +11,8 @@
         "noEmit": true,
         "esModuleInterop": true,
         "allowJs": true,
-        "resolveJsonModule": true
+        "resolveJsonModule": true,
+        "allowImportingTsExtensions": true
     },
     "include": [
         "."

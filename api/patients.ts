@@ -1,4 +1,4 @@
-import { getGoogleSheetsClient } from './lib/google.js';
+import { getGoogleSheetsClient } from './lib/google.ts';
 
 export default async function handler(req: any, res: any) {
     if (req.method !== 'POST' && req.method !== 'PUT') {
@@ -59,8 +59,11 @@ export default async function handler(req: any, res: any) {
             const rows = result.data.values || [];
 
             // rows is an array of arrays, e.g. [['ID'], ['123'], ['124']]
-            // Find row index (1-based for A1 notation)
-            const rowIndex = rows.findIndex((row: any[]) => row[0] == patient.id) + 1;
+            // Find row index (1-based for A1 notation), skip header row at index 0
+            const rowIndex = rows.findIndex((row: any[], i: number) => {
+                if (i === 0 || !row[0]) return false;
+                return String(row[0]).trim() === String(patient.id).trim();
+            }) + 1;
 
             if (rowIndex === 0) {
                 return res.status(404).json({ error: 'Patient not found' });
